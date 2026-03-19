@@ -1,0 +1,63 @@
+[package]
+name = "lumenflow_core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "High-performance Art-Net 4 protocol engine and DMX universe manager"
+
+[lib]
+name = "lumenflow_core"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+serde = { workspace = true }
+nix = { workspace = true }
+ipnetwork = "0.20"
+bincode = { workspace = true }
+zerocopy = { workspace = true }
+nom = { workspace = true }
+socket2 = { workspace = true }
+crossbeam = { workspace = true }
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+metrics = { workspace = true, optional = true }
+metrics-exporter-prometheus = { workspace = true, optional = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[features]
+default = ["logging"]
+logging = ["tracing-subscriber"]
+profiling = ["metrics", "metrics-exporter-prometheus"]
+
+# Feature: WireShark PCAP export
+pcap-export = []
+
+# Feature: RDM protocol support (Remote Device Management)
+rdm-support = []
+
+[dev-dependencies]
+criterion = { workspace = true }
+proptest = { workspace = true }
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
+arbitrary = { workspace = true }
+tokio-test = { workspace = true }
+
+[[bench]]
+name = "hot_path"
+harness = false
+
+[[bench]]
+name = "parser_performance"
+harness = false
+

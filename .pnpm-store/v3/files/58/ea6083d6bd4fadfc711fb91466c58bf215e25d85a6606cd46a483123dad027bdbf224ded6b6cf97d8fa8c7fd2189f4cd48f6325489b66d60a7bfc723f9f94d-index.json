@@ -1,0 +1,258 @@
+{
+  "name": "@solidjs/router",
+  "version": "0.15.4",
+  "files": {
+    "LICENSE": {
+      "checkedAt": 1773571875066,
+      "integrity": "sha512-J6WU5/2GxkXdw05d1+P6eUn/OwrzUgZ5T8jb20qBRnmaMCRLIbN99Xg5rkxyBXMvHzOHgMXLKno8eLB2XDzRhQ==",
+      "mode": 420,
+      "size": 1074
+    },
+    "dist/data/action.js": {
+      "checkedAt": 1773571875068,
+      "integrity": "sha512-58GeWPHIdokB3AwATLI6ITaca91HECRuAul4f62ABtRTzbUefHBDhdUYhwFilbZvdNGKLIX2tlQHKwo9Oznh8g==",
+      "mode": 420,
+      "size": 5759
+    },
+    "dist/data/createAsync.js": {
+      "checkedAt": 1773571875069,
+      "integrity": "sha512-hwULOdwAJy0UMPX6HiVmyeYDpGkvyo/iWbta2Rnuh8bIZN7nM47Dq3K4n9JLg8118/03Wbpgive46FMBnvLpgA==",
+      "mode": 420,
+      "size": 2678
+    },
+    "dist/routers/createRouter.js": {
+      "checkedAt": 1773571875071,
+      "integrity": "sha512-egmMRegIPAXTRFL2fivetfp6IEXgXZj5VOCmOiMMYM4tmc6b5JtkB+dC+vB4Q+y/uWB3/YADwc/AtzTSJfw93Q==",
+      "mode": 420,
+      "size": 1406
+    },
+    "dist/data/events.js": {
+      "checkedAt": 1773571875073,
+      "integrity": "sha512-aRNUSm7PmG3KFdal2V25xT0WIj1fxUNxfiaQazr8OD/sQYdx6NDj7D836RfHg5icGh479wicds5YKkToK6ByXw==",
+      "mode": 420,
+      "size": 5459
+    },
+    "dist/routers/HashRouter.js": {
+      "checkedAt": 1773571875074,
+      "integrity": "sha512-9/2dTTYaCd9spQuwBFimUL9h+8oT8hgMSVwtxLe2RvXq4aRs2vpx2RP6mLTMEJZDgVHWokXDh9ptggwMt/UJdg==",
+      "mode": 420,
+      "size": 1842
+    },
+    "dist/data/index.js": {
+      "checkedAt": 1773571875076,
+      "integrity": "sha512-ksRhPCqrtAPp2O857HcmDKFbFNmQ3Ct9vWU1663mkYU0WKA8I0gxR+dr0qwBiq956MFED2LPLZNgOYxNPdk49A==",
+      "mode": 420,
+      "size": 257
+    },
+    "dist/index.js": {
+      "checkedAt": 1773571875078,
+      "integrity": "sha512-tLeZeuZijtQ13g066WdvkurR1LYZ1Q1ssv/AUhEHBnpeMZ3C6ETIR0C1ex6EHoyxcJ2e9DzVu5AGS1N8y1GyOA==",
+      "mode": 420,
+      "size": 56857
+    },
+    "dist/routers/index.js": {
+      "checkedAt": 1773571875079,
+      "integrity": "sha512-AkCULospu0kMDPRga1uRgwevem3tNFermDippWaqa1bFmmz0dECmH76Qd2gFd+AAaIBHf1e9NpW+2IOMH3AItA==",
+      "mode": 420,
+      "size": 297
+    },
+    "dist/lifecycle.js": {
+      "checkedAt": 1773571875081,
+      "integrity": "sha512-8ciRKiiqiLBnwuLB6Un3grEnOn/Oc1uJobM02tIXZ2135p+Wiva4M+ReydlYNWooOMkvpNA3emrBGzWLb4p9Ow==",
+      "mode": 420,
+      "size": 1921
+    },
+    "dist/routers/MemoryRouter.js": {
+      "checkedAt": 1773571875083,
+      "integrity": "sha512-VgI9wJmnXvvmQpQDwwja9UPLrsBiMsHCiphrc1YFu63/FT8zCXesKZ8+A83i27xkz+pdIhovjMdJ0vmeoEqSGw==",
+      "mode": 420,
+      "size": 1851
+    },
+    "dist/data/query.js": {
+      "checkedAt": 1773571875085,
+      "integrity": "sha512-igJADyGmmpkWiIQDGlC/eI5AM/9oKP4QrJpmGGitnloDMX4nk8fAGIlUVow7urEQzxPNGQ5ezdDO5vR5Y6AB0A==",
+      "mode": 420,
+      "size": 8145
+    },
+    "dist/data/response.js": {
+      "checkedAt": 1773571875087,
+      "integrity": "sha512-wFWw9UqekobdPBf2ye8huA2lfIgeUuTB5CNLNURg0lju7zUPMNLjU8UNSrJrsXffkdQuFT4TO28EiUxpzPf/Qg==",
+      "mode": 420,
+      "size": 1397
+    },
+    "dist/routers/Router.js": {
+      "checkedAt": 1773571875088,
+      "integrity": "sha512-lsUpVo1eDqphryPZ5Ud8O/oT+yy3b4/tW8TZx/rZUBqHA/7Vt8NfjNam6+edtr/0PGBnHxbVuZiluh6lgaQqtA==",
+      "mode": 420,
+      "size": 1841
+    },
+    "dist/routing.js": {
+      "checkedAt": 1773571875090,
+      "integrity": "sha512-GzUVJv69KqMGnLYR/06ZaT0QaC/0GCKX1GipTM1or6rt8ZdCMcY03/3BHM2rn2NNY4YekUy6RAJ5Rvwi8onXNA==",
+      "mode": 420,
+      "size": 20121
+    },
+    "dist/routers/StaticRouter.js": {
+      "checkedAt": 1773571875092,
+      "integrity": "sha512-tpXB09ZL8L0pTf/IrQmAf17nqoY7H96Y/MXrGvccUEf+yNZ++VjbY8sCb57q0dolbHr7OP8D8uSL95qSQqyrug==",
+      "mode": 420,
+      "size": 469
+    },
+    "dist/types.js": {
+      "checkedAt": 1773571875094,
+      "integrity": "sha512-TuHIj4w/TkzTTLbAAzm/nW0Db/St469J6HHMiWa4THKdi3VJKsxkE8mmZKwApXlYIjrBPEIp2oxi6+alPk94Pw==",
+      "mode": 420,
+      "size": 11
+    },
+    "dist/utils.js": {
+      "checkedAt": 1773571875096,
+      "integrity": "sha512-qESkztS2O7FwxZo3KkeIEcOoon9UPhkt46YYZ4plTFW4lCtRtvpd+OHIkPJowU+fqLiisBOSjHkqNhd/jAgc6A==",
+      "mode": 420,
+      "size": 6297
+    },
+    "package.json": {
+      "checkedAt": 1773571875098,
+      "integrity": "sha512-4OKYTYyPzIUtLjOksFvEX2c+qNLCg8GjYpuYXb5ZsFB9aiz9pRmfI8837QAVGVW7TyXHFp34yL5BQPh2ktI5bA==",
+      "mode": 420,
+      "size": 1556
+    },
+    "dist/components.jsx": {
+      "checkedAt": 1773571875099,
+      "integrity": "sha512-CZvUiiTisxReXxqjiOWTv1qWfNkI+RaUbdSZmbOsAK1HsemoSNXXkgjlCyCvejZdnfAQCbr56YZd0o4X9XYyTg==",
+      "mode": 420,
+      "size": 1624
+    },
+    "dist/routers/components.jsx": {
+      "checkedAt": 1773571875101,
+      "integrity": "sha512-hT68LDBUu6VQ9nkQllUCJh5p/6bp5TXX8T0/aTey6vWU5tw6oXFoTiyA1weu5cr86/Mg8QwXtmMVzJuoViIaKA==",
+      "mode": 420,
+      "size": 4850
+    },
+    "dist/index.jsx": {
+      "checkedAt": 1773571875102,
+      "integrity": "sha512-MzWJvliXL7rGKM7oV3UJuIXwEgZtTdkPZ6vYKQazLeo87mcYn8AOmtK7VLGos0CsxcmJDUHx9w/NEb0N+HGN3Q==",
+      "mode": 420,
+      "size": 392
+    },
+    "README.md": {
+      "checkedAt": 1773571875104,
+      "integrity": "sha512-efSL7cDiRkdmGXQ5ii9PwKXjiPXEK7W+Yv59TVTk9wzubwDS+30SPy4soabc2VxiKRzKsUDVyoL00Cc5jGRz0g==",
+      "mode": 420,
+      "size": 39695
+    },
+    "dist/data/action.d.ts": {
+      "checkedAt": 1773571875106,
+      "integrity": "sha512-97wGXKL3dMFyw43XEoOOihkdv5uUqfZyj/3F0cCVRsVHvRL4MkQzZT7l1jqlDDqDJHgHl59XG6PzflRb0+KvYA==",
+      "mode": 420,
+      "size": 1366
+    },
+    "dist/components.d.ts": {
+      "checkedAt": 1773571875107,
+      "integrity": "sha512-ajXYSUsTqE0gAVxg6CgPXrMYtCij/Hpc3LM2FFw8FalI5uiLyTokfMojGZWH64bT7RmVlw7oT8WU52ICVKpYsA==",
+      "mode": 420,
+      "size": 966
+    },
+    "dist/routers/components.d.ts": {
+      "checkedAt": 1773571875108,
+      "integrity": "sha512-ZVgwrKe0jziZckKri1eT2pXHl2w/fzaYeeLZbSEvJMgHk+6u7B/ZqpxzTwW5xEh/pnNG7QgpeD7/Cjgp4js0tQ==",
+      "mode": 420,
+      "size": 1130
+    },
+    "dist/data/createAsync.d.ts": {
+      "checkedAt": 1773571875110,
+      "integrity": "sha512-BS4JzfzYVwzzQh77T9hWZazIAexBUDJbfcaFL458yMYTPbpQGhoK8SEu5XV2/fvlMlB4hTwR0y4RcUcSICn8vw==",
+      "mode": 420,
+      "size": 1136
+    },
+    "dist/routers/createRouter.d.ts": {
+      "checkedAt": 1773571875111,
+      "integrity": "sha512-MrPPkTSXeqJbbHkwEZW3xhRjHqhjtNnOygeBlVtvRErtWBt2kRUfLTfb2sb+nRzKlaXOPue2klHIjR039BGWrw==",
+      "mode": 420,
+      "size": 643
+    },
+    "dist/data/events.d.ts": {
+      "checkedAt": 1773571875112,
+      "integrity": "sha512-oiHIYZ1FSO3VO0ppqiAGj5yiEfJVA/gYRUQwIMjjPwpFs5tuGGRVNM5YOkr8/FZYvq4virrZF7LYr5sy55BJVQ==",
+      "mode": 420,
+      "size": 231
+    },
+    "dist/routers/HashRouter.d.ts": {
+      "checkedAt": 1773571875115,
+      "integrity": "sha512-38edyM70gcEpKFfHMgw1myjNJHHD7JmjdQjQAdWlp4qt/yodYMVR25gXTN37YWTMBZkG8DRTxeno7148gnWDpw==",
+      "mode": 420,
+      "size": 353
+    },
+    "dist/data/index.d.ts": {
+      "checkedAt": 1773571875118,
+      "integrity": "sha512-5Vo43jEatWbvxu3WCPhrNpwCXZ1bvvXMENlq4d3mXkgfC52dsdq8M4dDWyqp3lE8H9kweirqrUzclRSgjziIMA==",
+      "mode": 420,
+      "size": 316
+    },
+    "dist/index.d.ts": {
+      "checkedAt": 1773571875119,
+      "integrity": "sha512-4dDbnZIfsW0EfGvNFZde+MBiQ3+VfK6oN8lUf7kONJLqcfkM983ktp4GJCAWDFXnlePfBv7A6t1PZpyKDzp6Ag==",
+      "mode": 420,
+      "size": 806
+    },
+    "dist/routers/index.d.ts": {
+      "checkedAt": 1773571875121,
+      "integrity": "sha512-tUokfKGq+etXCOFOh6WaUpCJIAW/f0WoRX5zlMZPbpKHaQLE8Yh0sYG1WHMt6DKH0TA8dtCgGRdzb8rnUjjjbw==",
+      "mode": 420,
+      "size": 605
+    },
+    "dist/lifecycle.d.ts": {
+      "checkedAt": 1773571875122,
+      "integrity": "sha512-WjcbNlcDbOHNIyhMSqAXBUBzZ9FT3pkBKZUVRFRoFLbW9Rv9+mLidHsQRdbt4COUsvOmL1n8QGhlm2xX5fhw+A==",
+      "mode": 420,
+      "size": 385
+    },
+    "dist/routers/MemoryRouter.d.ts": {
+      "checkedAt": 1773571875123,
+      "integrity": "sha512-hWlrJ5RfOqGU9s8iwzEg6kBUqEDJlE1qET587TVWHm7u2zMNe3qVrDakLOdODvgyfGUhd4I1F+nPdWFjag01Ow==",
+      "mode": 420,
+      "size": 855
+    },
+    "dist/data/query.d.ts": {
+      "checkedAt": 1773571875124,
+      "integrity": "sha512-S6dRZSs30hORl45FUNynQuRx/qRVFF4xRj5fAtn4xUxvHbKlaE5sIegqQm45w2KAx1660uq6ePa+LY24T5Up6Q==",
+      "mode": 420,
+      "size": 1261
+    },
+    "dist/data/response.d.ts": {
+      "checkedAt": 1773571875125,
+      "integrity": "sha512-4PJrwfCz29QlF3t4Yre6hiIOgitnMiIbUCfShgXLwqCNHLgH7rP+7eIarYKcQomEQk2HnA+EEvGUqePOlOzRAA==",
+      "mode": 420,
+      "size": 344
+    },
+    "dist/routers/Router.d.ts": {
+      "checkedAt": 1773571875126,
+      "integrity": "sha512-F6OkVF3BLR+eOQpr087RfRsYawbYF8Mt+LmKePcZsPsLJn17ggQHwmL5R6+/OgOlsS/vUH5TES//9bJi9u99Mw==",
+      "mode": 420,
+      "size": 303
+    },
+    "dist/routing.d.ts": {
+      "checkedAt": 1773571875127,
+      "integrity": "sha512-KMA3o4OqoEud5vdvyjgKSxWwmF7Aj+kIxufFBSE6sSpvksTeePp6E65PpIJjiJjQ0TeeTEml7GoqnDepvOcoqQ==",
+      "mode": 420,
+      "size": 7403
+    },
+    "dist/routers/StaticRouter.d.ts": {
+      "checkedAt": 1773571875128,
+      "integrity": "sha512-mRVkdoEZytRhWhX7qAphwTr0NFbKTy0D7WlXbv8EleffKnNvmuWp05YBolE7ic+X2jxP15Df+KRyDDScBUef6A==",
+      "mode": 420,
+      "size": 244
+    },
+    "dist/types.d.ts": {
+      "checkedAt": 1773571875130,
+      "integrity": "sha512-cwYSs7NZSLEKvZVz5ryi29El+VXp0R/PissOyrJ9N2WIyI6tByTviQC5F7w855YeigLfPKALM7mhk16iWA6gfQ==",
+      "mode": 420,
+      "size": 6477
+    },
+    "dist/utils.d.ts": {
+      "checkedAt": 1773571875131,
+      "integrity": "sha512-uNIlhYQWqNvlMxnsNStilirYi0xC3KD1Dk2P/KxPLHhSh0bmkSIwLrYTEenpFtgr1ZWFPYc7ki4qsY1s6g6SmA==",
+      "mode": 420,
+      "size": 1048
+    }
+  }
+}

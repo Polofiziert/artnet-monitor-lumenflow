@@ -1,0 +1,42 @@
+{
+  "name": "ansi-sequence-parser",
+  "version": "1.1.3",
+  "files": {
+    "dist/index.cjs": {
+      "checkedAt": 1773571888215,
+      "integrity": "sha512-54mxS2EOyiDHI4pfOKqFPxXlcX8XWg4q+her8mqXDyO6G05WHmpLDiS2yT05mcYM6CruZ9lLnMvIxFc664/jEA==",
+      "mode": 420,
+      "size": 8763
+    },
+    "dist/index.js": {
+      "checkedAt": 1773571888216,
+      "integrity": "sha512-ZHR64eOXpwiub/Dsb1V8/WujpXKdUQQdxjRneEvEVG/k6MFafvAL7g0nyN7U6rhV/G+92z1yyetMAOWh81xjEg==",
+      "mode": 420,
+      "size": 7510
+    },
+    "package.json": {
+      "checkedAt": 1773571888218,
+      "integrity": "sha512-6ukycyErxvYrpqeEEX9RDfH0y4DFI0puVesFWcqs7zr5iK4Taw0RTqvOjJKX7/EiUc58J7eojiOY/Epi5NfmUA==",
+      "mode": 420,
+      "size": 1047
+    },
+    "CHANGELOG.md": {
+      "checkedAt": 1773571888219,
+      "integrity": "sha512-jEbJzXvjqP3IHSQWMn4pfduJ2IgXz/O5o3ry8OnPHeJuC0VgCrttEZWcJ1liH+hIaqptxtlobdoIPAAxJ4sZvA==",
+      "mode": 420,
+      "size": 537
+    },
+    "README.md": {
+      "checkedAt": 1773571888221,
+      "integrity": "sha512-/aGIqGEZ9gCU5lkytjaLd3XcfOFwVkKxNIz2tB5gZvYxqaWcn7NCGWi2whw3M3FX0Fm1jBNelT9YT7NLWkoorw==",
+      "mode": 420,
+      "size": 2885
+    },
+    "dist/index.d.ts": {
+      "checkedAt": 1773571888223,
+      "integrity": "sha512-Ow3ZjKHRcXO2Z/xL0vrxFI7i78M23Rtd0kCzBmcu/Qpp3lkxEo9P69VHt0iJJqksdtZWjQxjSxrbk0rpT/jmHw==",
+      "mode": 420,
+      "size": 2043
+    }
+  }
+}

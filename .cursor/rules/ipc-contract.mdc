@@ -1,0 +1,15 @@
+---
+description: LumenFlow IPC contract — Tauri commands, events, and binary formats between Rust backend and SolidJS frontend
+globs: "**/viewport_culler.rs,**/useDmxStream.ts,**/useUniverseMetrics.ts,**/useDiagLog.ts,**/main.rs"
+alwaysApply: false
+---
+
+# IPC Contract
+
+When modifying Tauri IPC (commands, events, binary payloads) between the Rust backend and SolidJS frontend:
+
+1. **Read the contract first:** `docs/IPC_API_CONTRACT.md` is the single source of truth.
+2. **Binary formats:** `dmx-frame` and `universe-metrics` use fixed binary layouts. Changes are breaking.
+3. **Viewport culling:** Only emit data for universes in `active_ids`. Frontend calls `set_active_universes` when visible set changes.
+4. **60Hz emit loop:** Use `MissedTickBehavior::Skip`. Never queue stale frames.
+5. **DTOs:** Keep `DeviceInfoDto`, `DiagEntryDto`, etc. in sync with backend structs. Add fields, don't remove.

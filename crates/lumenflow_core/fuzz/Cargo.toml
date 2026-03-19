@@ -1,0 +1,2 @@
+// Cargo-fuzz manifest for fuzzing infrastructure
+name = "lumenflow_core"

@@ -1,0 +1,24 @@
+{
+  "name": "@tauri-apps/cli-darwin-x64",
+  "version": "2.10.1",
+  "files": {
+    "package.json": {
+      "checkedAt": 1773571881654,
+      "integrity": "sha512-jSOC3e5KDI7elWeq/zQQYjMBRXY0F7j9VOdRCXlDYlFkQVHjQUU+QgFeEmpKSoVUfMJQRhNOlpTGJ1xkSzE2Og==",
+      "mode": 420,
+      "size": 696
+    },
+    "README.md": {
+      "checkedAt": 1773571881656,
+      "integrity": "sha512-FowHJep2+yBbEahNxbPohtHPh25k9ZEyxpSUjToixBASPt3ML6ddQ0u1bE2wP7zQE1jJZ4pY+Ny5Khjr/O954A==",
+      "mode": 420,
+      "size": 97
+    },
+    "cli.darwin-x64.node": {
+      "checkedAt": 1773571881711,
+      "integrity": "sha512-1/nh2JuohW544KQ5IPZkwK1hbvl4hYkg+uVW02r15fJdJg7eir5EdCSIzF1BZey47Nohf4l0OFsWcL8hgamb0A==",
+      "mode": 420,
+      "size": 16075120
+    }
+  }
+}

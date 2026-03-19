@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumenflow"
+version = "0.1.0"
+description = "High-performance Art-Net 4 monitoring and control"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later OR MIT"}

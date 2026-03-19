@@ -1,0 +1,33 @@
+# Virtual Art-Net network configuration for LumenFlow testing.
+#
+# Use with: ./scripts/spawn-virtual-network.sh
+#
+# Consoles send ArtDmx and respond to ArtPoll. Use same universes with different
+# IPs to test merge detection (Routing Matrix "2 SRC" badge).
+#
+# For merge testing on one machine: add loopback aliases first:
+#   sudo ifconfig lo0 alias 127.0.0.2
+#   sudo ifconfig lo0 alias 127.0.0.3
+#
+# Nodes receive ArtDmx and respond to ArtPoll. Use port 6455 when LumenFlow
+# runs on the same machine (port 6454 conflict).
+
+target: "127.0.0.1"
+rate: 44
+
+consoles:
+  - name: "Desk Primary"
+    ip: "127.0.0.2"
+    universes: 1
+    pattern: sine
+    physical: 0
+  - name: "Desk Secondary"
+    ip: "127.0.0.3"
+    universes: 1
+    pattern: chase
+    physical: 0
+
+nodes:
+  - name: "Virtual Node 1"
+    ip: "127.0.0.4"
+    port: 6455

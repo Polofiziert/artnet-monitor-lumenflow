@@ -1,0 +1,41 @@
+# Project LICENSE
+
+LumenFlow is dual-licensed under the following terms:
+
+## GNU General Public License v3.0 or later (GPLv3+)
+
+This software is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+See [LICENSE-GPLv3](LICENSE-GPLv3) for full text.
+
+## MIT License
+
+Alternatively, this software may be used, copied, modified, and distributed
+under the terms of the MIT License.
+
+See [LICENSE-MIT](LICENSE-MIT) for full text.
+
+---
+
+## License Selection
+
+**Choose either license for your use:**
+
+- **GPLv3**: If you create a derivative work and distribute it, you must share your modifications
+- **MIT**: If you create a derivative work, you can keep it proprietary
+
+## Third-party Dependencies
+
+All dependencies are compatible with both GPLv3 and MIT licenses.
+
+See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for attribution.
+
+---
+
+The dual license allows LumenFlow to:
+
+- Serve the open-source community (GPLv3)
+- Enable commercial use and closed-source derivatives (MIT)

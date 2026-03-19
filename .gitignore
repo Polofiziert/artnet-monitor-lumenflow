@@ -1,0 +1,55 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+*.pdb
+
+# Node / Frontend
+/node_modules/
+/dist/
+/build/
+/.vite/
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Development
+.env
+.env.*.local
+debug.log
+*.log
+
+# Tauri
+/crates/lumenflow_ui/src-tauri/target/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Test coverage
+/coverage/
+lcov.info
+
+# Temporary files
+*.tmp
+.cache/
+
+# PCAP recordings (can be large)
+*.pcap
+*.pcapng
+# Exception: small negative-test pcap for Wireshark compliance verification
+!wireshark/artnet_malformed_negative.pcap
+
+# Performance profiles
+*.prof
+flamegraph.svg
+
+# Build output
+bundled/

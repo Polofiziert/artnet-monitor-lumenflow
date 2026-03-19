@@ -1,0 +1,30 @@
+{
+  "name": "@types/chai-subset",
+  "version": "1.3.6",
+  "files": {
+    "LICENSE": {
+      "checkedAt": 1773571883338,
+      "integrity": "sha512-HQaIQk9pwOcyKutyDk4o2a87WnotwYuLGYFW43emGm4FvIJFKPyg+OYaw5sTegKAKf+C5SKa1ACjzCLivbaHrQ==",
+      "mode": 420,
+      "size": 1141
+    },
+    "README.md": {
+      "checkedAt": 1773571883338,
+      "integrity": "sha512-Rtxqf3cQJoBRDbNKC62tVQDwl/DS/pWx55eLl4v13mo82EnQLYh3LPZ/W2MHfIxGdAUcCn21g+P6/fxGZDsCMA==",
+      "mode": 420,
+      "size": 1069
+    },
+    "index.d.ts": {
+      "checkedAt": 1773571883339,
+      "integrity": "sha512-aRiRZiigWjZKDI57FEejHf9cjtBdBv20Gpcjw4Yl3PeW+BbshCxzK+ONNao8UQPsbVsPIJldOUO256OcQjKtmA==",
+      "mode": 420,
+      "size": 340
+    },
+    "package.json": {
+      "checkedAt": 1773571883339,
+      "integrity": "sha512-e77pR7WetzrDPcmKs+a3aCBLSqgJkL5iHTWn0x81gz37cQXt+P021u2BU1oOOpaNJFZ7Bt+HWH/IXhiQb707qQ==",
+      "mode": 420,
+      "size": 1009
+    }
+  }
+}

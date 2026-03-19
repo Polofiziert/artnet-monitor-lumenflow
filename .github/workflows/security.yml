@@ -1,0 +1,45 @@
+name: Security Audit
+
+on:
+  schedule:
+    - cron: "0 0 * * 0" # Weekly on Sunday
+  push:
+    paths:
+      - "**/Cargo.lock"
+      - "**/package-lock.json"
+      - "**/pnpm-lock.yaml"
+
+jobs:
+  cargo-audit:
+    name: Cargo Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run cargo audit
+        uses: rustsec/audit-check-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  npm-audit:
+    name: NPM Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=moderate || true

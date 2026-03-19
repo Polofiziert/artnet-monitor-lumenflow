@@ -1,0 +1,42 @@
+{
+  "name": "@tauri-apps/plugin-window-state",
+  "version": "2.4.1",
+  "files": {
+    "dist-js/index.cjs": {
+      "checkedAt": 1773571877470,
+      "integrity": "sha512-8pfaybgz7QLQ30piLOPsOKHWInuB6rILBVM8cwEL+8/lI0x0jYRDSW0CwgIxEDbntR3K+pOjl3eYmOD1H91GqA==",
+      "mode": 420,
+      "size": 1605
+    },
+    "dist-js/index.js": {
+      "checkedAt": 1773571877471,
+      "integrity": "sha512-9oNmikU3vOPJwrF6+40Z9pNdnaVlYU5hNZVK3tyPT0iA36wMcOlw7FwGGAjWQ+nOv965KaunDWUdNVLDwA7qAw==",
+      "mode": 420,
+      "size": 1478
+    },
+    "package.json": {
+      "checkedAt": 1773571877472,
+      "integrity": "sha512-enAYyvRqeckGygqv2EGSVP49vRPu59wtFT7MG4opbxG2P/gA3uKDG1cZWPFgB2mLooiojNq7Ki2Xj7CKOlTbxw==",
+      "mode": 420,
+      "size": 757
+    },
+    "README.md": {
+      "checkedAt": 1773571877474,
+      "integrity": "sha512-54I3bU0sdhn0iRiDGvtYxpesRaPknYQ2/pqOaC7jzGzEBY5Tg3lFFWw1BWPtnCqHYplUG/G0ntdB28Zpo+h39g==",
+      "mode": 420,
+      "size": 3607
+    },
+    "LICENSE.spdx": {
+      "checkedAt": 1773571877475,
+      "integrity": "sha512-oLSzmtyMAnzmzLa4iVo8W5s4KDt3wNWlMX2MUUOgX75i5BiPobCUheMk5YcOKQtlS4VVXsFrRjtq+sAf82XYmw==",
+      "mode": 420,
+      "size": 888
+    },
+    "dist-js/index.d.ts": {
+      "checkedAt": 1773571877476,
+      "integrity": "sha512-Y8u4PBCGBXjmNch4uYIOCEB2YUZ7N+Pl2rRvhywmz9ayNd31F31ocnzuSE1u3oHRvOjBm7dKwU7VOk3UsjnjHA==",
+      "mode": 420,
+      "size": 816
+    }
+  }
+}

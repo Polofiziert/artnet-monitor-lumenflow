@@ -1,0 +1,37 @@
+# .cargo/config.toml workspace configuration
+
+[alias]
+# Convenient shortcuts
+fmt = "fmt --all"
+check = "clippy --all-targets --all-features -- -D warnings"
+test-all = "test --all --verbose"
+test-fast = "test --lib"
+bench-all = "bench --all"
+fuzz = "fuzz run artnet_dmx_parser"
+prof = "flamegraph --bin lumenflow"
+
+[profile.dev]
+opt-level = 1
+
+[profile.test]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Performance profiling
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false
+
+[build]
+# Strict warnings in CI
+rustflags = ["-D", "warnings"]
+
+[term]
+color = "auto"
+verbose = true
