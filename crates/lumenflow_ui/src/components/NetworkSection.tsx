@@ -184,8 +184,8 @@ const NetworkSection: Component<NetworkSectionProps> = (props) => {
             <span
               class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200"
               classList={{
-                "translate-x-5": settings()?.spec_targets ?? true,
-                "translate-x-0.5": !(settings()?.spec_targets ?? true),
+                "translate-x-0": settings()?.spec_targets ?? true,
+                "-translate-x-4": !(settings()?.spec_targets ?? true),
               }}
             />
           </button>
@@ -215,8 +215,8 @@ const NetworkSection: Component<NetworkSectionProps> = (props) => {
               <span
                 class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200"
                 classList={{
-                  "translate-x-5": settings()?.subnet_broadcast ?? false,
-                  "translate-x-0.5": !(settings()?.subnet_broadcast ?? false),
+                  "translate-x-0": settings()?.subnet_broadcast ?? false,
+                  "-translate-x-4": !(settings()?.subnet_broadcast ?? false),
                 }}
               />
             </button>

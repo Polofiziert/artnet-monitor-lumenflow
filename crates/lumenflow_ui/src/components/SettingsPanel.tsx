@@ -72,8 +72,8 @@ const SettingsPanel: Component<SettingsPanelProps> = (props) => {
                   <span
                     class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200"
                     classList={{
-                      "translate-x-5": props.isMockMode(),
-                      "translate-x-0.5": !props.isMockMode(),
+                      "translate-x-0": props.isMockMode(),
+                      "-translate-x-4": !props.isMockMode(),
                     }}
                   />
                 </button>
