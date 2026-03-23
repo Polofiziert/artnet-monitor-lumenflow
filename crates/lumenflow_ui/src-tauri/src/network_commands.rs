@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use lumenflow_core::engine::DiscoveryConfig;
 use lumenflow_core::artnet::ART_NET_PORT;
+use lumenflow_core::parse_discovery_targets_from_env;
 use lumenflow_core::network::{get_network_interfaces, resolve_interface_for_cidr};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -226,6 +227,13 @@ pub fn derive_network_config(settings: &NetworkSettingsDto) -> NetworkConfig {
     let mut unicast_targets = Vec::new();
     for s in &settings.unicast_targets {
         if let Ok(addr) = s.parse::<SocketAddr>() {
+            unicast_targets.push(addr);
+        }
+    }
+    // Docker / virtual lab: `pnpm run dev:docker` sets LUMENFLOW_DISCOVERY_TARGETS; merge with UI
+    // settings so ArtPoll reaches port-mapped consoles/node (127.0.0.1:6455–6457).
+    for addr in parse_discovery_targets_from_env() {
+        if !unicast_targets.contains(&addr) {
             unicast_targets.push(addr);
         }
     }

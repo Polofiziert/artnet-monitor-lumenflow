@@ -71,13 +71,14 @@ if [[ "${1:-}" == "--docker" ]]; then
     echo "Starting virtual network via Docker (project: $COMPOSE_PROJECT_NAME)..."
     echo ""
     echo "Run LumenFlow with: pnpm run dev:docker"
-    echo "Stop with: docker compose -f docker-compose.virtual-network.yml down"
+    echo "Stop with: docker compose -p \"$COMPOSE_PROJECT_NAME\" -f docker-compose.virtual-network.yml down"
+    echo "Rebuild (same project name as this script): docker compose -p \"$COMPOSE_PROJECT_NAME\" -f docker-compose.virtual-network.yml build --no-cache"
     echo ""
     UP=(up)
     if [[ -n "$DETACH" ]]; then
         UP+=(--detach)
     fi
-    docker compose -f docker-compose.virtual-network.yml "${UP[@]}" "${COMPOSE_ARGS[@]}"
+    docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.virtual-network.yml "${UP[@]}" "${COMPOSE_ARGS[@]}"
     exit 0
 fi
 

@@ -666,7 +666,13 @@ async fn run_udp_listener(
                     }
                     Ok(lumenflow_core::ArtNetPacket::PollReply(reply)) => {
                         let device_ip = reply.ip();
-                        let is_self = our_ip == Some(device_ip);
+                        // Only treat as controller self-reply when IP matches *and* short name is ours.
+                        // Docker nodes may advertise a lab IP (e.g. 10.0.0.20) that matches a host NIC by coincidence.
+                        let is_self = our_ip == Some(device_ip)
+                            && reply
+                                .short_name_str()
+                                .trim()
+                                .eq_ignore_ascii_case("LumenFlow");
                         if is_self {
                             tracing::trace!(ip = %device_ip, "Ignoring ArtPollReply from self");
                         } else {

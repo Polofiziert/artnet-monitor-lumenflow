@@ -28,7 +28,7 @@ services:
       - --target
       - host.docker.internal
       - --sync-target
-      - 10.255.255.255:6454
+      - "10.255.255.255:6454"
       - --physical
       - "0"
     ports:
@@ -56,7 +56,7 @@ services:
       - --target
       - host.docker.internal
       - --sync-target
-      - 10.255.255.255:6454
+      - "10.255.255.255:6454"
       - --physical
       - "1"
     ports:
