@@ -1,5 +1,10 @@
 import type { Component } from "solid-js";
 import { onMount, onCleanup, createSignal, Show } from "solid-js";
+import {
+  getThermalStops,
+  thermalColor,
+  type ResolvedTheme,
+} from "../lib/themePalette";
 
 interface UniverseHeatmapProps {
   universes: () => number[];
@@ -11,41 +16,13 @@ interface UniverseHeatmapProps {
     { staleness: number; sourceCount: number; sequenceErrors: number }
   >;
   warningUniverses?: () => number[];
+  resolvedTheme: () => ResolvedTheme;
 }
 
 const CELL_SIZE = 24;
 const CELL_GAP = 2;
 const CELL_STEP = CELL_SIZE + CELL_GAP;
 const FRAME_MS = 1000 / 30;
-
-type RGB = [number, number, number];
-
-const THERMAL_STOPS: ReadonlyArray<{ pos: number; rgb: RGB }> = [
-  { pos: 0.0, rgb: [0x1a, 0x1a, 0x1a] },
-  { pos: 0.05, rgb: [0x1e, 0x3a, 0x5f] },
-  { pos: 0.2, rgb: [0x25, 0x63, 0xeb] },
-  { pos: 0.4, rgb: [0x22, 0xc5, 0x5e] },
-  { pos: 0.6, rgb: [0xea, 0xb3, 0x08] },
-  { pos: 0.85, rgb: [0xfb, 0xbf, 0x24] },
-  { pos: 1.0, rgb: [0xff, 0xff, 0xff] },
-];
-
-function thermalColor(activity: number): string {
-  if (activity <= 0) return "#1A1A1A";
-  const t = Math.min(1, Math.max(0, activity));
-  for (let i = 0; i < THERMAL_STOPS.length - 1; i++) {
-    const s0 = THERMAL_STOPS[i]!;
-    const s1 = THERMAL_STOPS[i + 1]!;
-    if (t <= s1.pos) {
-      const f = (t - s0.pos) / (s1.pos - s0.pos);
-      const r = Math.round(s0.rgb[0] + (s1.rgb[0] - s0.rgb[0]) * f);
-      const g = Math.round(s0.rgb[1] + (s1.rgb[1] - s0.rgb[1]) * f);
-      const b = Math.round(s0.rgb[2] + (s1.rgb[2] - s0.rgb[2]) * f);
-      return `rgb(${r},${g},${b})`;
-    }
-  }
-  return "#FFFFFF";
-}
 
 function computeActivity(channels: ArrayLike<number> | undefined): number {
   if (!channels || channels.length === 0) return 0;
@@ -60,19 +37,22 @@ function drawWarningTriangle(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
-  size: number
+  size: number,
+  resolved: ResolvedTheme
 ): void {
   const half = size / 2;
   const triH = size * 0.866;
+  const fill = resolved === "dark" ? "#F59E0B" : "#B45309";
+  const excl = resolved === "dark" ? "#0B0B0B" : "#FAFAFA";
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(cx, cy - triH * 0.4);
   ctx.lineTo(cx - half, cy + triH * 0.6);
   ctx.lineTo(cx + half, cy + triH * 0.6);
   ctx.closePath();
-  ctx.fillStyle = "#F59E0B";
+  ctx.fillStyle = fill;
   ctx.fill();
-  ctx.fillStyle = "#0B0B0B";
+  ctx.fillStyle = excl;
   ctx.font = `bold ${Math.round(size * 0.55)}px system-ui`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -149,6 +129,16 @@ const UniverseMap: Component<UniverseHeatmapProps> = (props) => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const resolved = props.resolvedTheme();
+    const stops = getThermalStops(resolved);
+    const selectedStroke = resolved === "dark" ? "#2DD4BF" : "#0F766E";
+    const hoverStroke =
+      resolved === "dark"
+        ? "rgba(255,255,255,0.5)"
+        : "rgba(24,24,27,0.45)";
+    const labelHigh = resolved === "dark" ? "#0B0B0B" : "#18181B";
+    const labelLow = resolved === "dark" ? "#A3A3A3" : "#71717A";
+
     const { cols, rows } = gridLayout();
     const canvasW = cols * CELL_STEP - CELL_GAP;
     const canvasH = rows * CELL_STEP - CELL_GAP;
@@ -181,33 +171,37 @@ const UniverseMap: Component<UniverseHeatmapProps> = (props) => {
       if (needsGlow) {
         ctx.save();
         const intensity = Math.min(1, (activity - 0.8) * 5);
-        ctx.shadowColor = `rgba(251,191,36,${(intensity * 0.6).toFixed(2)})`;
+        const glow =
+          resolved === "dark"
+            ? `rgba(251,191,36,${(intensity * 0.6).toFixed(2)})`
+            : `rgba(234,88,12,${(intensity * 0.55).toFixed(2)})`;
+        ctx.shadowColor = glow;
         ctx.shadowBlur = 10;
       }
 
-      ctx.fillStyle = thermalColor(activity);
+      ctx.fillStyle = thermalColor(activity, stops);
       ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
 
       if (needsGlow) ctx.restore();
 
       if (uni === selected) {
-        ctx.strokeStyle = "#2DD4BF";
+        ctx.strokeStyle = selectedStroke;
         ctx.lineWidth = 2;
         ctx.strokeRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
       }
 
       if (uni === hoveredId && uni !== selected) {
-        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.strokeStyle = hoverStroke;
         ctx.lineWidth = 1;
         ctx.strokeRect(x + 0.5, y + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
       }
 
       if (warnings.has(uni)) {
-        drawWarningTriangle(ctx, x + CELL_SIZE - 6, y + 6, 9);
+        drawWarningTriangle(ctx, x + CELL_SIZE - 6, y + 6, 9, resolved);
       }
 
       if (showLabels) {
-        ctx.fillStyle = activity > 0.5 ? "#0B0B0B" : "#A3A3A3";
+        ctx.fillStyle = activity > 0.5 ? labelHigh : labelLow;
         ctx.font = "9px system-ui";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -232,6 +226,11 @@ const UniverseMap: Component<UniverseHeatmapProps> = (props) => {
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     });
   });
+
+  const legendGradient = () =>
+    props.resolvedTheme() === "dark"
+      ? "linear-gradient(to right, #1A1A1A, #1E3A5F, #2563EB, #22C55E, #EAB308, #FBBF24, #FFF)"
+      : "linear-gradient(to right, #E4E4E7, #C7D2FE, #607AF0, #22C55E, #CA8A04, #EA580C, #181818)";
 
   return (
     <div
@@ -290,8 +289,7 @@ const UniverseMap: Component<UniverseHeatmapProps> = (props) => {
           <div
             class="h-2 w-28 rounded-sm"
             style={{
-              background:
-                "linear-gradient(to right, #1A1A1A, #1E3A5F, #2563EB, #22C55E, #EAB308, #FBBF24, #FFF)",
+              background: legendGradient(),
             }}
           />
           <span>100%</span>

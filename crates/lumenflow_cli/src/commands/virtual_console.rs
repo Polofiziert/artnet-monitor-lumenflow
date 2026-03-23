@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use lumenflow_core::{
-    build_mock_poll_reply, ArtNetPacket, ArtNetParser, MockPollReplyConfig,
+    build_art_sync, build_mock_poll_reply, ArtNetPacket, ArtNetParser, MockPollReplyConfig,
 };
 
 const ART_NET_PORT: u16 = 6454;
@@ -68,6 +68,7 @@ fn get_pattern(name: &str) -> Result<PatternFn> {
 ///
 /// Binds to an ephemeral port. Listens for ArtPoll and replies with ArtPollReply
 /// (unicast to the poll source). Sends ArtDmx at the configured rate to the target.
+#[allow(clippy::too_many_arguments)] // CLI surface: many independent flags
 pub async fn run(
     name: &str,
     ip: &str,
@@ -77,6 +78,7 @@ pub async fn run(
     pattern_name: &str,
     target: &str,
     physical: u8,
+    sync_target: Option<&str>,
     verbose: bool,
 ) -> Result<()> {
     let pattern = get_pattern(pattern_name)?;
@@ -86,6 +88,12 @@ pub async fn run(
         .map_err(|e| anyhow::anyhow!("invalid IP '{}': {}", ip, e))?;
 
     let target_addr = super::resolve::resolve_target(target, ART_NET_PORT).await?;
+
+    let sync_addr = if let Some(st) = sync_target {
+        Some(super::resolve::resolve_target(st, ART_NET_PORT).await?)
+    } else {
+        None
+    };
 
     let bind = bind_addr.unwrap_or("0.0.0.0:0");
     let socket = tokio::net::UdpSocket::bind(bind).await?;
@@ -163,8 +171,8 @@ pub async fn run(
                 let time_ms = start.elapsed().as_secs_f64() * 1000.0;
 
                 for uni in 0..universes {
-                    for ch in 0..CHANNEL_COUNT {
-                        dmx_buf[ch] = pattern(ch, time_ms);
+                    for (ch, slot) in dmx_buf.iter_mut().enumerate().take(CHANNEL_COUNT) {
+                        *slot = pattern(ch, time_ms);
                     }
                     sequence = sequence.wrapping_add(1);
                     let pkt = build_art_dmx_with_physical(uni, sequence, physical, &dmx_buf);
@@ -180,6 +188,14 @@ pub async fn run(
                             target_addr,
                             preview = preview.join(" ")
                         );
+                    }
+                }
+                if let Some(ref sa) = sync_addr {
+                    let sync_pkt = build_art_sync();
+                    if let Err(e) = socket.send_to(&sync_pkt, sa).await {
+                        eprintln!("[WARN] failed to send ArtSync: {e}");
+                    } else if verbose {
+                        eprintln!("[TX ArtSync] → {}", sa);
                     }
                 }
             }

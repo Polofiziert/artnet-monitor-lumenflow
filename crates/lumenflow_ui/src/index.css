@@ -2,6 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens: rgb components (space-separated) for Tailwind alpha modifiers. */
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --lf-obsidian: 11 11 11;
+  --lf-surface: 20 20 20;
+  --lf-surface-hover: 26 26 26;
+  --lf-edge: 31 31 31;
+  --lf-edge-active: 42 42 42;
+  --lf-teal: 45 212 191;
+  --lf-teal-dim: 20 184 166;
+  --lf-primary: 229 229 229;
+  --lf-secondary: 163 163 163;
+  --lf-muted: 82 82 82;
+  --lf-amber: 245 158 11;
+  --lf-flicker: 217 119 6;
+  --lf-error: 239 68 68;
+  --lf-red-400: 248 113 113;
+  --lf-red-500: 239 68 68;
+  --lf-body-bg: rgb(11 11 11);
+  --lf-body-fg: rgb(229 229 229);
+  --lf-scrollbar-thumb: 31 31 31;
+  --lf-scrollbar-thumb-hover: 42 42 42;
+  --lf-range-thumb: 45 212 191;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  /* High-contrast Pro-Lab light: outdoor / sunlight readability */
+  --lf-obsidian: 245 245 246;
+  --lf-surface: 237 237 239;
+  --lf-surface-hover: 228 228 231;
+  --lf-edge: 212 212 216;
+  --lf-edge-active: 161 161 170;
+  --lf-teal: 15 118 110;
+  --lf-teal-dim: 13 99 92;
+  --lf-primary: 23 23 23;
+  --lf-secondary: 82 82 91;
+  --lf-muted: 113 113 122;
+  --lf-amber: 180 83 9;
+  --lf-flicker: 154 52 18;
+  --lf-error: 220 38 38;
+  --lf-red-400: 185 28 28;
+  --lf-red-500: 220 38 38;
+  --lf-body-bg: rgb(245 245 246);
+  --lf-body-fg: rgb(23 23 23);
+  --lf-scrollbar-thumb: 180 180 186;
+  --lf-scrollbar-thumb-hover: 140 140 148;
+  --lf-range-thumb: 15 118 110;
+}
+
 html {
   font-family:
     system-ui,
@@ -23,8 +74,8 @@ html {
 body {
   margin: 0;
   padding: 0;
-  background: #0b0b0b;
-  color: #e5e5e5;
+  background: var(--lf-body-bg);
+  color: var(--lf-body-fg);
   overflow: hidden;
 }
 
@@ -56,12 +107,16 @@ body {
   }
 }
 
+input[type="range"] {
+  accent-color: rgb(var(--lf-teal));
+}
+
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   height: 12px;
   width: 12px;
   border-radius: 50%;
-  background: #2dd4bf;
+  background: rgb(var(--lf-range-thumb));
   cursor: pointer;
 }
 
@@ -75,10 +130,10 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f1f1f;
+  background: rgb(var(--lf-scrollbar-thumb));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a2a2a;
+  background: rgb(var(--lf-scrollbar-thumb-hover));
 }

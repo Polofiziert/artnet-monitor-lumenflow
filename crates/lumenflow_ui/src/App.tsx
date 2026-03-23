@@ -41,17 +41,39 @@ import { useUniverseMetrics } from "./hooks/useUniverseMetrics";
 import { useRouteInfo } from "./hooks/useRouteInfo";
 import { useNetworkStats } from "./hooks/useNetworkStats";
 import { useDevices } from "./hooks/useDevices";
-import { useAppMenu, HELP_OPEN_EVENT } from "./hooks/useAppMenu";
+import { useAppMenu } from "./hooks/useAppMenu";
+import { useTheme } from "./hooks/useTheme";
 import type { DeviceInfoDto } from "./components/DeviceList";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-shell";
+import HelpPanel from "./components/HelpPanel";
+import {
+  LUMENFLOW_MENU_EVENT,
+  ARTNET_SPEC_URL,
+  isMenuPayload,
+  type HelpSection,
+  type ViewId,
+} from "./lib/menuEvents";
 
-type ViewId = "dashboard" | "inspector" | "routing" | "devices";
+function focusHeaderSearch() {
+  (document.getElementById("lf-search") as HTMLInputElement | null)?.focus();
+}
+
+async function openArtNetSpecUrl() {
+  try {
+    await open(ARTNET_SPEC_URL);
+  } catch (e) {
+    console.warn("Failed to open Art-Net specification URL:", e);
+  }
+}
 
 const App: Component = () => {
+  const theme = useTheme();
   useAppMenu();
   const [isMockMode, setIsMockMode] = createSignal(true);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [helpOpen, setHelpOpen] = createSignal(false);
+  const [helpSection, setHelpSection] = createSignal<HelpSection>("overview");
   const [searchQuery, setSearchQuery] = createSignal("");
   const [gridColumns, setGridColumns] = createSignal<16 | 32>(32);
   const [emitRate, setEmitRate] = createSignal(30);
@@ -314,7 +336,30 @@ const App: Component = () => {
 
   onMount(() => {
     let unlisten: (() => void) | null = null;
-    listen(HELP_OPEN_EVENT, () => setHelpOpen(true)).then((fn) => {
+    listen(LUMENFLOW_MENU_EVENT, (ev) => {
+      if (!isMenuPayload(ev.payload)) return;
+      const p = ev.payload;
+      switch (p.kind) {
+        case "view":
+          setActiveView(p.view);
+          break;
+        case "settings":
+          setSettingsOpen(true);
+          break;
+        case "focus-search":
+          focusHeaderSearch();
+          break;
+        case "help":
+          batch(() => {
+            setHelpSection(p.section);
+            setHelpOpen(true);
+          });
+          break;
+        case "open-artnet-spec":
+          void openArtNetSpecUrl();
+          break;
+      }
+    }).then((fn) => {
       unlisten = fn;
     });
     onCleanup(() => {
@@ -625,6 +670,7 @@ const App: Component = () => {
                         selectedUniverse={selectedUniverse}
                         onSelect={(id) => setSelectedUniverse(id)}
                         universeData={universeData}
+                        resolvedTheme={theme.effective}
                         warningUniverses={() =>
                           !isMockMode()
                             ? Object.entries(universeMetrics.metrics)
@@ -707,6 +753,7 @@ const App: Component = () => {
                   <NetworkDiagnostics
                     jitterSamples={() => chartStats().jitterSamples}
                     networkLoadMbps={() => chartStats().networkLoadMbps}
+                    resolvedTheme={theme.effective}
                   />
                 </div>
               </div>
@@ -725,6 +772,7 @@ const App: Component = () => {
                       selectedUniverse={selectedUniverse}
                       onSelect={(id) => setSelectedUniverse(id)}
                       universeData={universeData}
+                      resolvedTheme={theme.effective}
                       warningUniverses={() =>
                         !isMockMode()
                           ? Object.entries(universeMetrics.metrics)
@@ -883,53 +931,12 @@ const App: Component = () => {
       {/* Toast Notifications */}
       <ToastContainer />
 
-      {/* Help panel (from Window → Help menu) */}
+      {/* Help panel (native Help menu) */}
       <Show when={helpOpen()}>
-        <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-obsidian/80 backdrop-blur-sm"
-          onClick={() => setHelpOpen(false)}
+        <HelpPanel
+          section={helpSection}
+          onClose={() => setHelpOpen(false)}
         />
-        <div
-          class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-edge bg-surface p-6 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-sm font-semibold tracking-wide text-primary">
-              LumenFlow Help
-            </h2>
-            <button
-              type="button"
-              onClick={() => setHelpOpen(false)}
-              class="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-secondary"
-            >
-              <span class="sr-only">Close</span>
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M6 18 18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <p class="text-xs text-secondary mb-2">
-            Search and the full user manual are available from the Help menu.
-          </p>
-          <p class="text-[11px] text-muted mb-3">
-            Use the tabs: Dashboard, Inspector, Routing Matrix, Devices.
-            Settings for network and display.
-          </p>
-          <p class="text-[11px] text-muted border-t border-edge pt-3">
-            <strong class="text-secondary">User manual (H2):</strong> See{" "}
-            <code class="rounded bg-obsidian px-1 font-mono text-[10px]">
-              docs/user-manual.md
-            </code>{" "}
-            in the project for views, universe notation (0:0:1), routing,
-            devices, IP configuration, and troubleshooting.
-          </p>
-        </div>
       </Show>
     </div>
   );

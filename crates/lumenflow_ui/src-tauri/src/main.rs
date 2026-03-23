@@ -37,6 +37,9 @@ fn main() {
     };
 
     if let Err(e) = tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(state.clone())
         .invoke_handler(tauri::generate_handler![
             set_active_universes,

@@ -415,7 +415,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         {urlsFor(device().ip_address)?.loading ? "Fetching…" : "Fetch URLs"}
                       </button>
                     </div>
-                    <Show when={urlsFor(device().ip_address)?.error}><div class="mb-1 text-[11px] text-red">{urlsFor(device().ip_address)?.error}</div></Show>
+                    <Show when={urlsFor(device().ip_address)?.error}><div class="mb-1 text-[11px] text-error">{urlsFor(device().ip_address)?.error}</div></Show>
                     <div class="flex flex-col gap-1 text-[11px]">
                       <Show when={urlsFor(device().ip_address)?.product_url}>{(url) => <button type="button" onClick={() => open(url())} class="truncate text-left text-teal hover:text-teal-dim">Product: {url()}</button>}</Show>
                       <Show when={urlsFor(device().ip_address)?.user_guide}>{(url) => <button type="button" onClick={() => open(url())} class="truncate text-left text-teal hover:text-teal-dim">Guide: {url()}</button>}</Show>

@@ -42,7 +42,7 @@ export function priorityColor(p: number): string {
     case 0x80:
       return "text-amber";
     case 0xe0:
-      return "text-red";
+      return "text-error";
     case 0xf0:
       return "text-teal";
     default:

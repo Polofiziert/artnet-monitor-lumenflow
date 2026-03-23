@@ -272,14 +272,28 @@ cargo tauri signer sign "dist/LumenFlow_0.2.0_x64.dmg"
 }
 ```
 
-## Database Backup Strategy (if applicable)
+## Config File Locations (Tauri app_config_dir)
+
+LumenFlow uses Tauri's platform-specific paths. The app identifier is `dev.lumenflow.app`.
+
+| Platform | Config directory | Network config |
+|----------|------------------|----------------|
+| **macOS** | `~/Library/Application Support/dev.lumenflow.app/` | `network.json` |
+| **Linux** | `~/.config/dev.lumenflow.app/` (or `$XDG_CONFIG_HOME/dev.lumenflow.app/`) | `network.json` |
+| **Windows** | `%APPDATA%\dev.lumenflow.app\` | `network.json` |
+
+## Backup Strategy
 
 ```bash
-# Backup user settings
-rsync -av ~/.lumenflow/config.json /backup/
+# Backup network config (platform-specific paths)
+# macOS:
+rsync -av ~/Library/Application\ Support/dev.lumenflow.app/network.json /backup/
 
-# Backup workspace layouts
-tar -czf /backup/workspaces-$(date +%Y%m%d).tar.gz ~/.lumenflow/workspaces/
+# Linux:
+rsync -av ~/.config/dev.lumenflow.app/network.json /backup/
+
+# Windows (PowerShell):
+Copy-Item "$env:APPDATA\dev.lumenflow.app\network.json" -Destination C:\backup\
 ```
 
 ## Disaster Recovery
@@ -287,13 +301,18 @@ tar -czf /backup/workspaces-$(date +%Y%m%d).tar.gz ~/.lumenflow/workspaces/
 ### Restore from Backup
 
 ```bash
-# Restore configuration
-rm -rf ~/.lumenflow
-mkdir -p ~/.lumenflow
-cp /backup/config.json ~/.lumenflow/
+# Restore network config
+# macOS:
+mkdir -p ~/Library/Application\ Support/dev.lumenflow.app
+cp /backup/network.json ~/Library/Application\ Support/dev.lumenflow.app/
 
-# Restore workspaces
-tar -xzf /backup/workspaces-20240315.tar.gz -C ~/
+# Linux:
+mkdir -p ~/.config/dev.lumenflow.app
+cp /backup/network.json ~/.config/dev.lumenflow.app/
+
+# Windows (PowerShell):
+New-Item -ItemType Directory -Force "$env:APPDATA\dev.lumenflow.app"
+Copy-Item C:\backup\network.json -Destination "$env:APPDATA\dev.lumenflow.app\"
 ```
 
 ### Fresh Install Recovery
@@ -301,11 +320,16 @@ tar -xzf /backup/workspaces-20240315.tar.gz -C ~/
 If local data corrupted:
 
 ```bash
-# Reset to factory defaults
-rm -rf ~/.lumenflow
-re-launch LumenFlow
+# macOS: Remove config directory
+rm -rf ~/Library/Application\ Support/dev.lumenflow.app
 
-# All data regenerated on startup
+# Linux:
+rm -rf ~/.config/dev.lumenflow.app
+
+# Windows (PowerShell):
+Remove-Item -Recurse -Force "$env:APPDATA\dev.lumenflow.app"
+
+# Re-launch LumenFlow — defaults regenerated on startup
 ```
 
 ## Monitoring Production Deployments

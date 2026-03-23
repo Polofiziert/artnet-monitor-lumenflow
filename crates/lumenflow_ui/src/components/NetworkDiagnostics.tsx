@@ -1,29 +1,28 @@
 import type { Component } from "solid-js";
 import { onMount, onCleanup } from "solid-js";
 import JitterHistogram from "./JitterHistogram";
+import {
+  getNetworkChartPalette,
+  type ResolvedTheme,
+} from "../lib/themePalette";
 
 interface NetworkDiagnosticsProps {
   networkLoadMbps: () => number[];
   jitterSamples: () => number[];
+  resolvedTheme: () => ResolvedTheme;
 }
 
 const FRAME_MS = 1000 / 15;
-const LABEL_COLOR = "#A3A3A3";
-const BG = "#0B0B0B";
-const AXIS_COLOR = "#1F1F1F";
 
 const PAD_L = 44;
 const PAD_R = 10;
 const PAD_T = 28;
 const PAD_B = 32;
 
-const BAND_COLORS = [
-  "rgba(30,58,95,0.85)",
-  "rgba(45,212,191,0.7)",
-  "rgba(34,197,94,0.65)",
-];
-
-const HorizonChart: Component<{ data: () => number[] }> = (props) => {
+const HorizonChart: Component<{
+  data: () => number[];
+  resolvedTheme: () => ResolvedTheme;
+}> = (props) => {
   let canvasRef: HTMLCanvasElement | undefined;
   let rafId: number | undefined;
   let lastFrame = 0;
@@ -33,6 +32,12 @@ const HorizonChart: Component<{ data: () => number[] }> = (props) => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    const P = getNetworkChartPalette(props.resolvedTheme());
+    const LABEL_COLOR = P.label;
+    const BG = P.bg;
+    const AXIS_COLOR = P.axis;
+    const BAND_COLORS = P.bandColors;
 
     const width = canvas.clientWidth;
     const height = 200;
@@ -98,7 +103,7 @@ const HorizonChart: Component<{ data: () => number[] }> = (props) => {
 
     // Top-line stroke for visual clarity
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(45,212,191,0.35)";
+    ctx.strokeStyle = P.topStroke;
     ctx.lineWidth = 1;
     for (let i = 0; i < data.length; i++) {
       const x = PAD_L + (i / Math.max(1, data.length - 1)) * plotW;
@@ -161,6 +166,8 @@ const HorizonChart: Component<{ data: () => number[] }> = (props) => {
 };
 
 const NetworkDiagnostics: Component<NetworkDiagnosticsProps> = (props) => {
+  const legend = () => getNetworkChartPalette(props.resolvedTheme()).legend;
+
   return (
     <div class="rounded-lg border border-edge bg-surface p-4">
       <h2 class="text-sm font-medium tracking-wide uppercase text-secondary mb-3">
@@ -168,10 +175,17 @@ const NetworkDiagnostics: Component<NetworkDiagnosticsProps> = (props) => {
       </h2>
       <div class="flex gap-4">
         <div class="flex-1 min-w-0">
-          <HorizonChart data={props.networkLoadMbps} />
+          <HorizonChart
+            data={props.networkLoadMbps}
+            resolvedTheme={props.resolvedTheme}
+          />
         </div>
         <div class="flex-1 min-w-0">
-          <JitterHistogram samples={props.jitterSamples} height={200} />
+          <JitterHistogram
+            samples={props.jitterSamples}
+            height={200}
+            resolvedTheme={props.resolvedTheme}
+          />
         </div>
       </div>
 
@@ -179,21 +193,21 @@ const NetworkDiagnostics: Component<NetworkDiagnosticsProps> = (props) => {
         <div class="flex items-center gap-1.5">
           <span
             class="inline-block h-2 w-2 rounded-sm"
-            style={{ background: "rgba(30,58,95,0.85)" }}
+            style={{ background: legend()[0] }}
           />
           <span>Low</span>
         </div>
         <div class="flex items-center gap-1.5">
           <span
             class="inline-block h-2 w-2 rounded-sm"
-            style={{ background: "rgba(45,212,191,0.7)" }}
+            style={{ background: legend()[1] }}
           />
           <span>Medium</span>
         </div>
         <div class="flex items-center gap-1.5">
           <span
             class="inline-block h-2 w-2 rounded-sm"
-            style={{ background: "rgba(34,197,94,0.65)" }}
+            style={{ background: legend()[2] }}
           />
           <span>High</span>
         </div>

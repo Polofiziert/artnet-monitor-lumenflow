@@ -10,10 +10,19 @@
 #
 # --docker: Use Docker instead of local processes. Runs docker compose.
 #
+# Docker options (after --docker):
+#   --detach, -d     Run containers in background
+#   --project, -p N  Set compose project name (default: lumenflow-vn or $COMPOSE_PROJECT_NAME)
+#   --               Pass remaining args to docker compose (e.g. -- --build)
+#
+# Linux: ensure host.docker.internal resolves (Docker 20.10+); else add to /etc/hosts or use gateway IP.
+#
 # Examples:
 #   ./scripts/spawn-virtual-network.sh
 #   ./scripts/spawn-virtual-network.sh my-custom-config.yaml
 #   ./scripts/spawn-virtual-network.sh --docker
+#   ./scripts/spawn-virtual-network.sh --docker --detach
+#   ./scripts/spawn-virtual-network.sh --docker -- --build
 #
 # For merge testing: Start 2+ consoles with same universes, different IPs.
 # LumenFlow's Routing Matrix will show "2 SRC" when both send to same universe.
@@ -26,11 +35,49 @@ cd "$PROJECT_ROOT"
 
 # Handle --docker flag
 if [[ "${1:-}" == "--docker" ]]; then
-    echo "Starting virtual network via Docker..."
+    shift
+    DETACH=""
+    if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
+        export COMPOSE_PROJECT_NAME
+    else
+        export COMPOSE_PROJECT_NAME="lumenflow-vn"
+    fi
+    COMPOSE_ARGS=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --detach|-d)
+                DETACH=1
+                shift
+                ;;
+            --project|-p)
+                if [[ -z "${2:-}" ]]; then
+                    echo "Error: $1 requires a value"
+                    exit 1
+                fi
+                export COMPOSE_PROJECT_NAME="$2"
+                shift 2
+                ;;
+            --)
+                shift
+                COMPOSE_ARGS+=("$@")
+                break
+                ;;
+            *)
+                COMPOSE_ARGS+=("$1")
+                shift
+                ;;
+        esac
+    done
+    echo "Starting virtual network via Docker (project: $COMPOSE_PROJECT_NAME)..."
     echo ""
     echo "Run LumenFlow with: pnpm run dev:docker"
+    echo "Stop with: docker compose -f docker-compose.virtual-network.yml down"
     echo ""
-    docker compose -f docker-compose.virtual-network.yml up
+    UP=(up)
+    if [[ -n "$DETACH" ]]; then
+        UP+=(--detach)
+    fi
+    docker compose -f docker-compose.virtual-network.yml "${UP[@]}" "${COMPOSE_ARGS[@]}"
     exit 0
 fi
 

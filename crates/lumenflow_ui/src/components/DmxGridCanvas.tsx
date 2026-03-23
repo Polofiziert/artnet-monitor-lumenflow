@@ -1,6 +1,10 @@
 import type { Component } from "solid-js";
 import { onMount, onCleanup } from "solid-js";
 import { globalHistory } from "../lib/channelHistory";
+import {
+  getDmxCanvasPalette,
+  type ResolvedTheme,
+} from "../lib/themePalette";
 
 interface DmxGridCanvasProps {
   channels: () => ArrayLike<number> | undefined;
@@ -11,6 +15,7 @@ interface DmxGridCanvasProps {
   selectedChannel: () => number | null;
   onHover: (ch: number | null) => void;
   onSelect: (ch: number | null) => void;
+  resolvedTheme: () => ResolvedTheme;
 }
 
 const CHANNEL_COUNT = 512;
@@ -19,41 +24,9 @@ const GAP = 1;
 const HIST_LEN = 64;
 const HIST_STEP = HIST_LEN - 1;
 
-const HEAT_COLORS: string[] = (() => {
-  const colors = new Array<string>(256);
-  colors[0] = "#525252";
-  for (let i = 1; i < 128; i++) {
-    const t = i / 127;
-    colors[i] =
-      `rgb(${Math.round(30 + t * 15)},${Math.round(140 + t * 72)},${Math.round(130 + t * 61)})`;
-  }
-  for (let i = 128; i < 255; i++) {
-    const t = (i - 128) / 126;
-    colors[i] =
-      `rgb(${Math.round(45 + t * 184)},${Math.round(212 + t * 17)},${Math.round(191 + t * 38)})`;
-  }
-  colors[255] = "#FFFFFF";
-  return colors;
-})();
-
 function clampByte(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : v | 0;
 }
-
-const BG_COLOR = "#0B0B0B";
-const GAP_COLOR = "#1A1A1A";
-const HOVER_RING = "rgba(45,212,191,0.4)";
-const SELECTED_RING = "rgba(45,212,191,0.6)";
-const FLICKER_RING = "rgba(245,158,11,0.6)";
-const FLICKER_SHADOW = "rgba(245,158,11,0.27)";
-const SPARK_FILL = "rgba(45,212,191,0.12)";
-const SPARK_STROKE = "rgba(45,212,191,0.30)";
-const LABEL_COLOR = "rgba(115,115,115,0.6)";
-const GLOW_COLOR = "rgba(45,212,191,0.5)";
-
-// Semi-transparent overlays composited on BG_COLOR during draw
-const HOVER_BG = "rgba(45,212,191,0.05)";
-const SELECTED_BG = "rgba(45,212,191,0.1)";
 
 const DmxGridCanvas: Component<DmxGridCanvasProps> = (props) => {
   let canvasRef: HTMLCanvasElement | undefined;
@@ -112,6 +85,21 @@ const DmxGridCanvas: Component<DmxGridCanvasProps> = (props) => {
 
   function draw() {
     if (!ctx || !canvasRef || containerWidth <= 0) return;
+
+    const palette = getDmxCanvasPalette(props.resolvedTheme());
+    const HEAT_COLORS = palette.heatColors;
+    const BG_COLOR = palette.bg;
+    const GAP_COLOR = palette.gap;
+    const HOVER_RING = palette.hoverRing;
+    const SELECTED_RING = palette.selectedRing;
+    const FLICKER_RING = palette.flickerRing;
+    const FLICKER_SHADOW = palette.flickerShadow;
+    const SPARK_FILL = palette.sparkFill;
+    const SPARK_STROKE = palette.sparkStroke;
+    const LABEL_COLOR = palette.label;
+    const GLOW_COLOR = palette.glow;
+    const HOVER_BG = palette.hoverBg;
+    const SELECTED_BG = palette.selectedBg;
 
     const { cols, cellW, totalH, slotW, slotH } = gridMetrics();
 

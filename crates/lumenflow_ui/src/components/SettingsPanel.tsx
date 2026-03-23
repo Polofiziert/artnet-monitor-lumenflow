@@ -1,7 +1,9 @@
 import type { Component } from "solid-js";
 import { Show } from "solid-js";
 import { useNetworkSettings } from "../hooks/useNetworkSettings";
+import { useTheme } from "../hooks/useTheme";
 import NetworkSection from "./NetworkSection";
+import type { ThemePreference } from "../lib/theme";
 
 export type ChannelValueFormat = "decimal" | "hex" | "binary" | "percent";
 
@@ -20,6 +22,7 @@ interface SettingsPanelProps {
 
 const SettingsPanel: Component<SettingsPanelProps> = (props) => {
   const network = useNetworkSettings(props.isOpen);
+  const theme = useTheme();
 
   return (
     <Show when={props.isOpen()}>
@@ -48,6 +51,45 @@ const SettingsPanel: Component<SettingsPanelProps> = (props) => {
 
         <div class="flex-1 overflow-auto p-4">
           <div class="flex flex-col gap-6">
+            {/* Appearance */}
+            <section>
+              <h3 class="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
+                Appearance
+              </h3>
+              <div class="flex items-center justify-between rounded-md border border-edge bg-obsidian p-3">
+                <div>
+                  <div class="text-sm text-primary">Theme</div>
+                  <div class="text-[11px] text-muted">
+                    Dark, Light, or match the system (outdoor: try Light)
+                  </div>
+                </div>
+                <div class="flex flex-wrap gap-1 rounded border border-edge bg-surface p-0.5">
+                  {(
+                    [
+                      ["dark", "Dark"],
+                      ["light", "Light"],
+                      ["system", "System"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        theme.setPreference(key as ThemePreference)
+                      }
+                      class="rounded px-2 py-0.5 text-[11px] font-medium transition-colors"
+                      classList={{
+                        "bg-teal/10 text-teal": theme.preference() === key,
+                        "text-muted hover:text-secondary":
+                          theme.preference() !== key,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
             {/* Development */}
             <section>
               <h3 class="mb-3 text-xs font-medium uppercase tracking-wide text-muted">

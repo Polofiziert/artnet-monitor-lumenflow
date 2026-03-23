@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
 use anyhow::Result;
-use lumenflow_core::{ArtNetPacket, ArtNetParser, ArtNetSocket};
+use lumenflow_core::{build_art_poll, ArtNetPacket, ArtNetParser, ArtNetSocket};
 
 const ARTNET_BROADCAST: SocketAddr = SocketAddr::new(
     std::net::IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
@@ -74,19 +74,6 @@ struct DiscoveredDevice {
     firmware: u16,
     ports: u16,
     universes: Vec<u16>,
-}
-
-/// Builds a spec-compliant ArtPoll (OpCode 0x2000) packet.
-fn build_art_poll() -> [u8; 18] {
-    let mut pkt = [0u8; 18];
-    pkt[0..8].copy_from_slice(b"Art-Net\0");
-    pkt[8] = 0x00; // OpCode low byte
-    pkt[9] = 0x20; // OpCode high byte  → 0x2000 LE
-    pkt[10] = 0x00; // ProtVerHi
-    pkt[11] = 0x0e; // ProtVerLo = 14
-    pkt[12] = 0x06; // Flags: send ArtPollReply on change + enable diagnostics
-    // Remaining bytes (diag_priority, target ports) are zero
-    pkt
 }
 
 fn print_table(devices: &[DiscoveredDevice]) {

@@ -2,8 +2,7 @@ import type { Component } from "solid-js";
 import { createSignal, onCleanup, For, Show } from "solid-js";
 import TimeCodeClock from "./TimeCodeClock";
 import { useTimeSync } from "../hooks/useTimeSync";
-
-type ViewId = "dashboard" | "inspector" | "routing" | "devices";
+import type { ViewId } from "../lib/menuEvents";
 
 interface HeaderBarProps {
   isConnected: () => boolean;

@@ -183,7 +183,7 @@ pub const IP_PROG_BIT_PORT: u8 = 0x02;
 ///
 /// For read-only query: set `enable_programming` to false and leave other fields as needed.
 /// For programming: set `enable_programming` to true and the bits for each field to program.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct IpProgConfig {
     /// Bit 7: 0 = read-only query, 1 = enable programming.
     pub enable_programming: bool,
@@ -207,24 +207,6 @@ pub struct IpProgConfig {
     pub port: Option<u16>,
     /// New default gateway. Used when program_gateway is true.
     pub gateway: Option<std::net::Ipv4Addr>,
-}
-
-impl Default for IpProgConfig {
-    fn default() -> Self {
-        Self {
-            enable_programming: false,
-            enable_dhcp: false,
-            program_gateway: false,
-            reset: false,
-            program_ip: false,
-            program_subnet: false,
-            program_port: false,
-            ip: None,
-            subnet_mask: None,
-            port: None,
-            gateway: None,
-        }
-    }
 }
 
 /// Builds a 36-byte ArtIpProg packet (OpCode 0xF800) per Art-Net 4 spec.
@@ -304,6 +286,39 @@ pub fn build_art_ip_prog(config: &IpProgConfig) -> [u8; 36] {
     pkt[26..30].copy_from_slice(&gw_bytes);
     // spare at 30-33
 
+    pkt
+}
+
+/// Builds a 34-byte **ArtIpProgReply** (OpCode 0xF900) with the node’s current addressing.
+///
+/// Set `dhcp` to mirror the **DHCP enabled** bit (status bit 6) in the reply.
+///
+/// # Errors
+/// Infallible.
+pub fn build_art_ip_prog_reply(
+    ip: std::net::Ipv4Addr,
+    subnet_mask: std::net::Ipv4Addr,
+    port: u16,
+    gateway: std::net::Ipv4Addr,
+    dhcp: bool,
+) -> [u8; 34] {
+    let mut pkt = [0u8; 34];
+    pkt[0..8].copy_from_slice(ART_NET_HEADER);
+    pkt[8..10].copy_from_slice(&0xF900u16.to_le_bytes());
+    pkt[10] = 0x00;
+    pkt[11] = 0x0e;
+    pkt[12..16].copy_from_slice(&[0u8; 4]);
+    pkt[16..20].copy_from_slice(&ip.octets());
+    pkt[20..24].copy_from_slice(&subnet_mask.octets());
+    pkt[24..26].copy_from_slice(&port.to_be_bytes());
+    let mut status = 0u8;
+    if dhcp {
+        status |= 0x40;
+    }
+    pkt[26] = status;
+    pkt[27] = 0x00;
+    pkt[28..32].copy_from_slice(&gateway.octets());
+    pkt[32..34].copy_from_slice(&[0u8; 2]);
     pkt
 }
 
@@ -485,6 +500,25 @@ mod tests {
         assert_eq!(&pkt[20..24], &[255, 255, 255, 0]);
         assert_eq!(&pkt[24..26], &[0x19, 0x36]); // 6454 BE
         assert_eq!(&pkt[26..30], &[192, 168, 1, 1]);
+    }
+
+    #[test]
+    fn test_build_art_ip_prog_reply_roundtrip() {
+        let ip = std::net::Ipv4Addr::new(10, 0, 0, 20);
+        let sm = std::net::Ipv4Addr::new(255, 255, 255, 0);
+        let gw = std::net::Ipv4Addr::new(10, 0, 0, 1);
+        let pkt = build_art_ip_prog_reply(ip, sm, 6454, gw, false);
+        assert_eq!(pkt.len(), 34);
+        match ArtNetParser::parse(&pkt) {
+            Ok(ArtNetPacket::IpProgReply(p)) => {
+                assert_eq!(p.ip(), ip);
+                assert_eq!(p.subnet_mask(), sm);
+                assert_eq!(p.gateway(), gw);
+                assert_eq!(p.port(), 6454);
+                assert!(!p.dhcp_enabled());
+            }
+            other => panic!("expected IpProgReply, got {other:?}"),
+        }
     }
 
     #[test]

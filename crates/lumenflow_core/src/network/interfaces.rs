@@ -45,7 +45,7 @@ pub fn default_spec_broadcast_targets(port: u16) -> Vec<std::net::SocketAddr> {
 }
 
 /// Enumerates all IPv4 network interfaces.
-
+///
 /// Excludes loopback by default. Returns `name`, `ip`, and when available
 /// `subnet` (CIDR) and `broadcast` address.
 ///
@@ -66,7 +66,7 @@ pub fn get_network_interfaces() -> Result<Vec<NetworkInterface>, InterfacesError
         let Some(sin) = addr.as_sockaddr_in() else {
             continue;
         };
-        let ip = Ipv4Addr::from(sin.ip());
+        let ip = sin.ip();
 
         if ip.is_loopback() {
             continue;
@@ -98,7 +98,7 @@ fn derive_subnet_broadcast(
 ) -> (Option<String>, Option<Ipv4Addr>) {
     let netmask = ifaddr.netmask.as_ref().and_then(|m| m.as_sockaddr_in());
     let netmask = match netmask {
-        Some(m) => Ipv4Addr::from(m.ip()),
+        Some(m) => m.ip(),
         None => return (None, None),
     };
 

@@ -1,5 +1,10 @@
 import type { Component } from "solid-js";
 import { onMount, onCleanup } from "solid-js";
+import {
+  buildDmxHeatColors,
+  getDmxCanvasPalette,
+  type ResolvedTheme,
+} from "../lib/themePalette";
 
 interface SparkDmxCellProps {
   channel: number;
@@ -11,32 +16,8 @@ interface SparkDmxCellProps {
   onHover?: () => void;
   onLeave?: () => void;
   onClick?: () => void;
+  resolvedTheme: () => ResolvedTheme;
 }
-
-// Precomputed 256-entry color table: gray(0) → dim teal → full teal → white(255)
-const HEAT_COLORS: string[] = (() => {
-  const colors = new Array<string>(256);
-  colors[0] = "#525252";
-
-  for (let i = 1; i < 128; i++) {
-    const t = i / 127;
-    const r = Math.round(30 + t * 15);
-    const g = Math.round(140 + t * 72);
-    const b = Math.round(130 + t * 61);
-    colors[i] = `rgb(${r},${g},${b})`;
-  }
-
-  for (let i = 128; i < 255; i++) {
-    const t = (i - 128) / 126;
-    const r = Math.round(45 + t * 184);
-    const g = Math.round(212 + t * 17);
-    const b = Math.round(191 + t * 38);
-    colors[i] = `rgb(${r},${g},${b})`;
-  }
-
-  colors[255] = "#FFFFFF";
-  return colors;
-})();
 
 function clampByte(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : v | 0;
@@ -85,7 +66,8 @@ const SparkDmxCell: Component<SparkDmxCellProps> = (props) => {
     }
     ctx.lineTo(w, h);
     ctx.closePath();
-    ctx.fillStyle = "rgba(45,212,191,0.12)";
+    const pal = getDmxCanvasPalette(props.resolvedTheme());
+    ctx.fillStyle = pal.sparkFill;
     ctx.fill();
 
     ctx.beginPath();
@@ -95,7 +77,7 @@ const SparkDmxCell: Component<SparkDmxCellProps> = (props) => {
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
-    ctx.strokeStyle = "rgba(45,212,191,0.30)";
+    ctx.strokeStyle = pal.sparkStroke;
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -147,9 +129,13 @@ const SparkDmxCell: Component<SparkDmxCellProps> = (props) => {
         class="absolute inset-0 z-10 flex items-center justify-center text-xs font-mono tabular-nums leading-none"
         classList={{ "font-semibold": props.value() >= 240 }}
         style={{
-          color: HEAT_COLORS[clampByte(props.value())],
+          color: buildDmxHeatColors(props.resolvedTheme())[
+            clampByte(props.value())
+          ],
           "text-shadow":
-            props.value() >= 240 ? "0 0 4px rgba(45,212,191,0.5)" : undefined,
+            props.value() >= 240
+              ? `0 0 4px ${getDmxCanvasPalette(props.resolvedTheme()).glow}`
+              : undefined,
         }}
       >
         {props.value()}

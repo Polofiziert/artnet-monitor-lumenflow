@@ -255,6 +255,76 @@ pub fn build_mock_poll_reply(config: &MockPollReplyConfig) -> [u8; 239] {
     pkt
 }
 
+/// One **ArtPollReply** bind for Swisson XND-8–style simulation (DMX Workshop capture).
+///
+/// Use with [`build_swisson_bind_poll_reply`] — one logical output port per packet (`num_ports = 1`).
+#[derive(Debug, Clone)]
+pub struct SwissonBindPollReplyParams {
+    /// Advertised node IPv4 (matches container `--ip`).
+    pub ip: std::net::Ipv4Addr,
+    pub mac: [u8; 6],
+    /// 1-based bind index (1..=8).
+    pub bind_index: u8,
+    pub short_name: String,
+    pub long_name: String,
+    pub node_report: String,
+    /// Output universe 15-bit port-address for this bind.
+    pub port_address: u16,
+    pub oem: u16,
+    pub vers_info: u16,
+    pub esta_man: u16,
+    pub status1: u8,
+    /// Set **GoodOutput** data-available when true (recent ArtDmx on this universe).
+    pub data_on_port: bool,
+}
+
+/// Builds a 239-byte **ArtPollReply** for one Swisson XND-8 bind (single output port).
+///
+/// # Errors
+/// Infallible; truncates strings to field limits.
+pub fn build_swisson_bind_poll_reply(p: &SwissonBindPollReplyParams) -> [u8; 239] {
+    let mut pkt = [0u8; 239];
+    let octets = p.ip.octets();
+
+    pkt[0..8].copy_from_slice(ART_NET_HEADER);
+    pkt[8..10].copy_from_slice(&0x2100u16.to_le_bytes());
+    pkt[10..14].copy_from_slice(&octets);
+    pkt[14..16].copy_from_slice(&6454u16.to_le_bytes());
+    pkt[16..18].copy_from_slice(&p.vers_info.to_be_bytes());
+    let pa = p.port_address;
+    let net = ((pa >> 8) & 0x7F) as u8;
+    let sub = ((pa >> 4) & 0x0F) as u8;
+    let univ = (pa & 0x0F) as u8;
+    pkt[18] = net;
+    pkt[19] = sub;
+    pkt[20..22].copy_from_slice(&p.oem.to_be_bytes());
+    pkt[22] = 0x00;
+    pkt[23] = p.status1;
+    pkt[24..26].copy_from_slice(&p.esta_man.to_be_bytes());
+
+    let short = p.short_name.as_bytes();
+    pkt[26..26 + short.len().min(18)].copy_from_slice(&short[..short.len().min(18)]);
+    let long = p.long_name.as_bytes();
+    pkt[44..44 + long.len().min(64)].copy_from_slice(&long[..long.len().min(64)]);
+    let nr = p.node_report.as_bytes();
+    pkt[108..108 + nr.len().min(64)].copy_from_slice(&nr[..nr.len().min(64)]);
+
+    pkt[172..174].copy_from_slice(&1u16.to_be_bytes());
+    pkt[174] = 0xC0;
+    pkt[178..182].copy_from_slice(&[0x00; 4]);
+    let go = if p.data_on_port { 0x80u8 } else { 0x00u8 };
+    pkt[182..186].copy_from_slice(&[go, 0x00, 0x00, 0x00]);
+    pkt[190] = univ;
+
+    pkt[200] = ST_CONFIG;
+    pkt[201..207].copy_from_slice(&p.mac);
+    pkt[207..211].copy_from_slice(&octets);
+    pkt[211] = p.bind_index;
+    pkt[212] = 0x08;
+
+    pkt
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -356,5 +426,38 @@ mod tests {
         assert_eq!(&pkt[207..211], &[10, 0, 0, 1]);
         assert_eq!(pkt[211], 1);
         assert_eq!(pkt.len(), 239);
+    }
+
+    #[test]
+    fn test_swisson_bind_poll_reply_parses() {
+        let ip = std::net::Ipv4Addr::new(10, 0, 0, 20);
+        let p = SwissonBindPollReplyParams {
+            ip,
+            mac: [0x28, 0x36, 0x38, 0xc0, 0x64, 0xc5],
+            bind_index: 3,
+            short_name: "Port 3".to_string(),
+            long_name: "SWISSON XND-8".to_string(),
+            node_report: "#0001 test".to_string(),
+            port_address: 0x0002,
+            oem: 0x28c1,
+            vers_info: 0x0103,
+            esta_man: 0x5377,
+            status1: 0x02,
+            data_on_port: true,
+        };
+        let pkt = build_swisson_bind_poll_reply(&p);
+        match ArtNetParser::parse(&pkt) {
+            Ok(ArtNetPacket::PollReply(reply)) => {
+                assert_eq!(reply.ip(), ip);
+                assert_eq!(reply.bind_index, 3);
+                assert_eq!(reply.short_name_str(), "Port 3");
+                assert_eq!(reply.long_name_str(), "SWISSON XND-8");
+                assert_eq!(reply.oem_code(), 0x28c1);
+                assert_eq!(reply.esta_man(), 0x5377);
+                assert_eq!(reply.firmware_version(), 0x0103);
+                assert_eq!(reply.num_ports(), 1);
+            }
+            other => panic!("expected PollReply, got {other:?}"),
+        }
     }
 }

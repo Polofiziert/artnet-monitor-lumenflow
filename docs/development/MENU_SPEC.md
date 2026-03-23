@@ -1,47 +1,45 @@
 # LumenFlow Window Menu Specification
 
-**Status:** Draft (Sprint 4 / M1)  
+**Status:** Implemented (M1 menu surface)  
 **Platform:** macOS, Windows, Linux (Tauri 2)
 
 ## Overview
 
-The native OS window menu shall provide access to View, Settings, and Help. On macOS the menu appears in the menu bar; on Windows/Linux as the window menu.
+The native OS menu provides **View**, **Help**, and related actions. On macOS it appears in the **system menu bar** (top of screen); on Windows/Linux it appears as the **window menu** attached to the window. Implementation: [`crates/lumenflow_ui/src/hooks/useAppMenu.ts`](../../crates/lumenflow_ui/src/hooks/useAppMenu.ts) builds on `Menu.default()` and **appends** LumenFlow items into the existing **View** and **Help** submenus (platform/Tauri entries stay; a separator is added when those menus already had items). If a submenu is missing, it is created and placed (View before **Window** when possible). Then `setAsAppMenu()`. Frontend bridge event: `lumenflow-menu` with typed payload ([`menuEvents.ts`](../../crates/lumenflow_ui/src/lib/menuEvents.ts)).
 
-## Implemented (Sprint 1)
+## View
 
-### Help
+| Item | ID | Action |
+|------|-----|--------|
+| **Dashboard** | `view-dashboard` | `setActiveView("dashboard")` — accelerator `Cmd/Ctrl+1` |
+| **Inspector** | `view-inspector` | `setActiveView("inspector")` — `Cmd/Ctrl+2` |
+| **Routing Matrix** | `view-routing` | `setActiveView("routing")` — `Cmd/Ctrl+3` |
+| **Devices** | `view-devices` | `setActiveView("devices")` — `Cmd/Ctrl+4` |
+| _(separator)_ | — | — |
+| **Settings…** | `view-settings` | Opens Settings panel — `Cmd/Ctrl+,` |
 
-- **LumenFlow Help** — Opens in-app help panel (search and manual placeholder).
-- **Search** — Same as Help (⌘K also focuses header search).
-- **Manual** — Opens help panel (full manual in H2).
-- **About LumenFlow** — Opens help panel (dedicated About in future).
+## Help
 
-On macOS, the Help submenu is set as the app Help menu (`setAsHelpMenuForNSApp`) so the OS can add a search box.
+| Item | ID | Action |
+|------|-----|--------|
+| **LumenFlow Help** | `lumenflow-help` | In-app help panel, **Features** section (`help` / `overview`) |
+| **Search** | `help-search` | Focuses header search (`#lf-search`) — `Cmd/Ctrl+K` (same as in-app shortcut) |
+| **User Manual…** | `manual` | Help panel, **User manual** section (`help` / `manual`) |
+| **Art-Net 4 Specification…** | `artnet-spec` | Opens official spec URL in default browser (`shell` `open`) |
+| _(separator)_ | — | — |
+| **About LumenFlow** | `about` | Help panel, **About** section (`help` / `about`) |
 
-## Planned (M1)
+On macOS, the Help submenu is set as the app Help menu (`setAsHelpMenuForNSApp`) so the OS can add its search field.
 
-### View
+## Planned (later)
 
-- **Dashboard** — Switch to Dashboard view (shortcut 1).
-- **Inspector** — Switch to Inspector view (shortcut 2).
-- **Routing Matrix** — Switch to Routing view (shortcut 3).
-- **Devices** — Switch to Devices view (shortcut 4).
-- _Separator_
-- **Settings** — Open Settings panel.
-- _Optional:_ **Toggle Mock Mode** — Switch mock data on/off.
+- **File → Export capture** — PCAP or diagnostic log (future).
+- **App menu (macOS)** — Rich **About** (version, license, links) if not covered by Help panel.
+- **View → Toggle Mock Mode** — Optional.
 
-### File (optional)
+### Window / OS default
 
-- **Export capture** — Export PCAP or diagnostic log (future).
-
-### App menu (macOS)
-
-- **About LumenFlow** — Version, license, link to docs.
-- **Quit** — Exit application.
-
-### Window (OS default)
-
-- Use Tauri default (minimize, zoom, close; window list on macOS).
+- Tauri default window commands (minimize, zoom, close; window list on macOS) remain as provided by the platform default menu.
 
 ## References
 

@@ -12,6 +12,8 @@ pub mod nzs;
 pub mod timecode;
 pub mod time_sync;
 pub mod trigger;
+pub mod tod;
+pub mod rdm_tunnel;
 
 pub use self::address::{build_art_address, ArtAddressCommand, ArtAddressPacket};
 pub use self::command::{build_art_command, ArtCommandHeader, ART_COMMAND_DATA_MAX};
@@ -21,7 +23,8 @@ pub use self::input::{build_art_input, ArtInputPacket};
 pub use self::nzs::ArtNzsHeader;
 pub use self::poll::ArtPollPacket;
 pub use self::poll_reply::{
-    build_mock_poll_reply, build_our_poll_reply, ArtPollReplyPacket, MockPollReplyConfig,
+    build_mock_poll_reply, build_our_poll_reply, build_swisson_bind_poll_reply,
+    ArtPollReplyPacket, MockPollReplyConfig, SwissonBindPollReplyParams,
 };
 pub use self::sync::{build_art_sync, ArtSyncPacket};
 pub use self::timecode::ArtTimeCodePacket;
@@ -29,13 +32,18 @@ pub use self::trigger::{
     build_art_trigger, ArtTriggerKey, ArtTriggerPacket, ART_TRIGGER_OEM_UNIVERSAL,
 };
 pub use self::ip_prog::{
-    build_art_ip_prog, ArtIpProgPacket, ArtIpProgReplyPacket, IpProgConfig,
+    build_art_ip_prog, build_art_ip_prog_reply, ArtIpProgPacket, ArtIpProgReplyPacket, IpProgConfig,
 };
 pub use self::data_request::{
     build_art_data_request, ArtDataReplyHeader, ArtDataRequestPacket, DR_POLL, DR_URL_PERS_GDTF,
     DR_URL_PERS_UDR, DR_URL_PRODUCT, DR_URL_SUPPORT, DR_URL_USER_GUIDE,
 };
 pub use self::time_sync::ArtTimeSyncPacket;
+pub use self::tod::{
+    build_art_tod_data, parse_art_tod_control, parse_art_tod_request, ArtTodControlInfo,
+    ArtTodRequestInfo, TOD_CMD_FULL, TOD_CTRL_FLUSH,
+};
+pub use self::rdm_tunnel::try_build_art_rdm_response_get_supported_parameters;
 
 pub const ART_NET_HEADER: &[u8; 8] = b"Art-Net\0";
 pub const ART_NET_PROTOCOL_VERSION: u16 = 14;

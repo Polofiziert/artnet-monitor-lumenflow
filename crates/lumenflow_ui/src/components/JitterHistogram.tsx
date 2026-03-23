@@ -1,19 +1,19 @@
 import type { Component } from "solid-js";
 import { onMount, onCleanup } from "solid-js";
+import {
+  getJitterChartPalette,
+  type ResolvedTheme,
+} from "../lib/themePalette";
 
 interface JitterHistogramProps {
   samples: () => number[];
   width?: number;
   height?: number;
+  resolvedTheme: () => ResolvedTheme;
 }
 
 const FRAME_MS = 1000 / 15;
 const BIN_COUNT = 20;
-const LABEL_COLOR = "#A3A3A3";
-const TEAL = "#2DD4BF";
-const AMBER = "#F59E0B";
-const BG = "#121212";
-const AXIS_COLOR = "#1F1F1F";
 
 const PAD_LEFT = 40;
 const PAD_RIGHT = 15;
@@ -82,6 +82,13 @@ const JitterHistogram: Component<JitterHistogramProps> = (props) => {
     const height = fixedH();
     if (width <= 0) return;
 
+    const P = getJitterChartPalette(props.resolvedTheme());
+    const LABEL_COLOR = P.label;
+    const TEAL = P.teal;
+    const AMBER = P.amber;
+    const BG = P.bg;
+    const AXIS_COLOR = P.axis;
+
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -142,7 +149,7 @@ const JitterHistogram: Component<JitterHistogramProps> = (props) => {
     const TWO_PI_SQRT = Math.sqrt(2 * Math.PI);
 
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.strokeStyle = P.gaussStroke;
     ctx.lineWidth = 1.5;
 
     for (let px = 0; px <= plotW; px++) {
@@ -161,7 +168,7 @@ const JitterHistogram: Component<JitterHistogramProps> = (props) => {
     // Mean line (dashed vertical)
     const meanX = PAD_LEFT + ((mean - binMin) / (binMax - binMin)) * plotW;
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(255,255,255,0.6)";
+    ctx.strokeStyle = P.meanLine;
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
     ctx.moveTo(meanX, PAD_TOP);

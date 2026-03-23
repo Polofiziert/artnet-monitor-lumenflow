@@ -116,6 +116,20 @@ pnpm run coverage          # Coverage report
 - Stores: 80%+
 - Components: 70%+
 - Hooks: 85%+
+- Theme: `crates/lumenflow_ui/src/lib/theme.test.ts` (effective theme resolution, canvas palette helpers)
+
+**Manual checks (Appearance):**
+
+- Settings → Appearance → Theme: Dark, Light, or System; choice persists across restart.
+- Reload the app: no obvious flash of the wrong theme before the saved preference applies.
+- Light mode: universe heatmap, channel grid canvas, and Network Diagnostics charts stay legible (including in bright ambient light).
+
+**Native OS menu (manual QA):**
+
+- **macOS:** **View** and **Help** appear in the menu bar; **Help** is the designated help menu (system search field may appear). **View →** items switch tabs; **Settings…** opens the panel; accelerators **⌘1–⌘4**, **⌘,**, **⌘K** match in-app behavior.
+- **Windows / Linux:** Same entries on the window menu; accelerators use **Ctrl** instead of **⌘**.
+- **Help → Art-Net 4 Specification…** opens the default browser to the spec URL (`shell` `open`).
+- Unit: `crates/lumenflow_ui/src/lib/menuEvents.test.ts` (`isMenuPayload`).
 
 ### UI Visual Regression (Playwright)
 
@@ -241,13 +255,25 @@ Config: `scripts/virtual-network.yaml`. Install `yq` for full YAML parsing; othe
 
 Run virtual consoles and nodes in Docker for real ArtPoll call-and-response. No loopback aliases required.
 
+Compose uses a **bridge network** `10.0.0.0/24` with static container IPs (`10.0.0.10`, `10.0.0.11`, `10.0.0.20`). Host ports **6455–6457** map to UDP **6454** in each container so LumenFlow on the host can **unicast** `ArtPoll` to `127.0.0.1:6455` etc. This is a **unicast-mapped** profile: subnet broadcast from the host does not reach container sockets unless you add extra routing or a LAN-like network mode.
+
+**Discovery targets** are centralized in [`scripts/virtual-network.ports.env`](../../scripts/virtual-network.ports.env). `pnpm run dev:docker` sources that file (when present) and sets `LUMENFLOW_DISCOVERY_TARGETS`.
+
 **Terminal 1** — Start virtual network:
 
 ```bash
 docker compose -f docker-compose.virtual-network.yml up
-# or:
+# or (default project name lumenflow-vn):
 ./scripts/spawn-virtual-network.sh --docker
+# detached:
+./scripts/spawn-virtual-network.sh --docker --detach
+# pass-through to compose:
+./scripts/spawn-virtual-network.sh --docker -- --build
 ```
+
+Stop: `docker compose -f docker-compose.virtual-network.yml down`
+
+The **node** service runs `virtual-node --profile swisson-xnd8` (eight `ArtPollReply` binds, `ArtTod*` / narrow `ArtRdm` / `ArtIpProgReply` stubs). Consoles use `--sync-target 10.255.255.255:6454` so **ArtSync** follows each DMX batch (DMXW_02-style directed broadcast).
 
 **Terminal 2** — Run LumenFlow with discovery targets:
 
@@ -256,6 +282,8 @@ pnpm run dev:docker
 ```
 
 Or manually: `LUMENFLOW_DISCOVERY_TARGETS=127.0.0.1:6455,127.0.0.1:6456,127.0.0.1:6457 pnpm run dev`
+
+**Linux:** ensure `host.docker.internal` resolves (Docker 20.10+); otherwise add `extra_hosts` or point `--target` at the host gateway.
 
 **Real operation (unchanged):** `pnpm run dev` — no env var, discovery uses broadcast only.
 

@@ -1,5 +1,3 @@
-use std::net::Ipv4Addr;
-
 use anyhow::Result;
 
 /// Prints LumenFlow version and lists network interfaces suitable for Art-Net.
@@ -13,7 +11,7 @@ pub fn run() -> Result<()> {
     println!("Protocol version: 14\n");
 
     println!("Network interfaces (IPv4):");
-    println!("{:<16} {}", "INTERFACE", "ADDRESS");
+    println!("{:<16} ADDRESS", "INTERFACE");
     println!("{}", "─".repeat(36));
 
     let mut found_any = false;
@@ -26,7 +24,7 @@ pub fn run() -> Result<()> {
         let Some(sin) = addr.as_sockaddr_in() else {
             continue;
         };
-        let ip = Ipv4Addr::from(sin.ip());
+        let ip = sin.ip();
 
         if ip.is_loopback() {
             continue;

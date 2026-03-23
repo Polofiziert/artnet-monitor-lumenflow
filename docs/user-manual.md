@@ -48,6 +48,7 @@ Universes are identified by **Net : SubNet : Universe** (Art-Net 15-bit port add
 
 ## 6. Settings
 
+- **Appearance → Theme** — **Dark** (default Pro-Lab), **Light** (higher contrast for bright environments such as outdoor festivals), or **System** (follow the OS light/dark setting). The window chrome follows this choice where the platform supports it.
 - **Mock Data Mode** — Simulate Art-Net for UI development.
 - **Grid Columns** — 16 or 32 columns in channel grids.
 - **Emit Rate** — IPC update frequency (Hz).
@@ -58,7 +59,14 @@ Universes are identified by **Net : SubNet : Universe** (Art-Net 15-bit port add
 
 ## 7. Help
 
-Use **Window → Help → LumenFlow Help** (or **Search**, **Manual**) to open the in-app help. The full manual is this document; it will be linked from the Help panel in a future release.
+Use the **native menu** (on macOS: **Help** in the menu bar at the top of the screen; on Windows/Linux: **Help** on the window menu):
+
+- **LumenFlow Help** — Opens the in-app help panel (overview of features).
+- **Search** — Focuses the header search field (same as **⌘K** on macOS / **Ctrl+K** on Windows/Linux).
+- **User Manual…** — Opens the help panel scrolled to the manual section.
+- **Art-Net 4 Specification…** — Opens the official Art-Net specification page in your browser (see [Art-Net](https://art-net.org.uk/resources/art-net-specification/) for the normative document). For protocol details in this guide, cross-check section numbers and page references in the PDF edition you use.
+
+This document is the canonical user manual; keep it aligned with the in-app help text.
 
 ---
 

@@ -98,6 +98,10 @@ enum Commands {
         #[arg(long)]
         bind: Option<String>,
 
+        /// After each DMX batch, send ArtSync to this host:port (e.g. 10.255.255.255:6454)
+        #[arg(long)]
+        sync_target: Option<String>,
+
         /// Log each packet sent/received
         #[arg(long)]
         verbose: bool,
@@ -112,6 +116,10 @@ enum Commands {
 
     /// Virtual node: receives ArtDmx and responds to ArtPoll (testing without hardware)
     VirtualNode {
+        /// Simulation profile: `generic` (single PollReply) or `swisson-xnd8` (capture-aligned)
+        #[arg(long, default_value = "generic")]
+        profile: String,
+
         /// Short name for ArtPollReply (max 18 chars)
         #[arg(long, default_value = "Virtual Node")]
         name: String,
@@ -158,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
             target,
             physical,
             bind,
+            sync_target,
             verbose,
         } => commands::virtual_console::run(
             &name,
@@ -168,6 +177,7 @@ async fn main() -> anyhow::Result<()> {
             &pattern,
             &target,
             physical,
+            sync_target.as_deref(),
             verbose,
         )
         .await,
@@ -175,11 +185,15 @@ async fn main() -> anyhow::Result<()> {
             commands::send_all_packets::run(&target).await
         }
         Commands::VirtualNode {
+            profile,
             name,
             ip,
             port,
             target,
             verbose,
-        } => commands::virtual_node::run(&name, &ip, port, &target, verbose).await,
+        } => {
+            let prof = commands::virtual_node::VirtualNodeProfile::parse(&profile)?;
+            commands::virtual_node::run(prof, &name, &ip, port, &target, verbose).await
+        }
     }
 }

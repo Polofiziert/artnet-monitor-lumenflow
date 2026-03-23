@@ -94,6 +94,18 @@ sudo apt install ./lumenflow_x.x.x_amd64.deb
 lumenflow
 ```
 
+## Config File Locations
+
+LumenFlow uses Tauri's platform-specific paths (`dev.lumenflow.app`):
+
+| Platform | Config (network.json) | Data (layouts, backups) |
+|----------|----------------------|-------------------------|
+| **macOS** | `~/Library/Application Support/dev.lumenflow.app/` | `~/Library/Application Support/dev.lumenflow.app/` |
+| **Linux** | `~/.config/dev.lumenflow.app/` | `~/.local/share/dev.lumenflow.app/` |
+| **Windows** | `%APPDATA%\dev.lumenflow.app\` | `%APPDATA%\dev.lumenflow.app\` |
+
+Network settings are persisted in `network.json` within the config directory.
+
 ## Initial Configuration
 
 ### 1. Network Setup
@@ -124,7 +136,11 @@ After first launch, LumenFlow will:
 File → Save Layout As...
 ```
 
-Layouts stored in: `~/.lumenflow/layouts/`
+Layouts stored in `{app_data_dir}/layouts/` (platform-specific). Paths:
+
+- **macOS:** `~/Library/Application Support/dev.lumenflow.app/layouts/`
+- **Linux:** `~/.local/share/dev.lumenflow.app/layouts/` (or `$XDG_DATA_HOME`)
+- **Windows:** `%APPDATA%\dev.lumenflow.app\layouts\`
 
 ## Troubleshooting
 
@@ -185,7 +201,7 @@ netstat -ano | findstr :6454
 2. Check devices are powered on
 3. In Settings → Network → Verbose Logging, set to DEBUG
 4. Restart LumenFlow
-5. Check log: `tail -f ~/.lumenflow/logs/app.log`
+5. Run from terminal for debug output (stdout/stderr), or check logs in `{app_data_dir}/logs/` when implemented
 
 **Common causes:**
 
@@ -280,7 +296,10 @@ ssh -L 6454:127.0.0.1:6454 user@foh-workstation
 Settings → Data → Auto-backup
 - Enabled (default)
 - Interval: Daily
-- Location: ~/.lumenflow/backups/
+- Location: {app_data_dir}/backups/ (platform-specific)
+  - macOS: ~/Library/Application Support/dev.lumenflow.app/backups/
+  - Linux: ~/.local/share/dev.lumenflow.app/backups/
+  - Windows: %APPDATA%\dev.lumenflow.app\backups\
 ```
 
 ### Manual Export
@@ -315,7 +334,11 @@ If update fails:
 1. **Backup** (optional):
 
    ```bash
-   cp -r ~/.lumenflow ~/lumenflow-backup-$(date +%Y%m%d)
+   # macOS: backup config directory
+   cp -r ~/Library/Application\ Support/dev.lumenflow.app ~/lumenflow-backup-$(date +%Y%m%d)
+
+   # Linux:
+   cp -r ~/.config/dev.lumenflow.app ~/lumenflow-backup-$(date +%Y%m%d)
    ```
 
 2. **Uninstall** current version
@@ -350,8 +373,10 @@ When reporting issues, include:
 2. **LumenFlow version:**
    Help → About LumenFlow
 
-3. **Log file:**
-   ~/.lumenflow/logs/app.log (last 50 lines)
+3. **Log file:** Run from terminal for debug output, or:
+   - **macOS:** `~/Library/Application Support/dev.lumenflow.app/logs/app.log` (when implemented)
+   - **Linux:** `~/.local/share/dev.lumenflow.app/logs/app.log` (when implemented)
+   - **Windows:** `%APPDATA%\dev.lumenflow.app\logs\app.log` (when implemented)
 
 4. **Reproduction steps:**
    Detailed walkthrough of the issue

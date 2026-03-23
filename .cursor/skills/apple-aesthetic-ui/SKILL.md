@@ -22,14 +22,31 @@ Turn functional SolidJS components into polished, professional Pro-Lab interface
 | Cyber Teal Dim | `#14B8A6`   | `text-teal-dim`              | Secondary accent, hover            |
 | Teal Glow      | `#2DD4BF33` | `shadow-[0_0_6px_#2DD4BF33]` | Soft glow on active cells          |
 | Safety Amber   | `#F59E0B`   | `text-amber`                 | Warnings, flicker alerts           |
-| Signal Red     | `#EF4444`   | `text-red`                   | Errors, critical alerts            |
+| Signal Red     | `#EF4444`   | `text-error` / `text-red-400` | Errors, critical alerts            |
 | Text Primary   | `#E5E5E5`   | `text-primary`               | Headings, primary content          |
 | Text Secondary | `#A3A3A3`   | `text-secondary`             | Labels, descriptions               |
 | Text Muted     | `#525252`   | `text-muted`                 | Disabled, tertiary info            |
 
-### Tailwind Config Additions
+### Light mode (outdoor / high contrast)
 
-Add these to `tailwind.config.js` → `theme.extend.colors`:
+Semantic tokens are driven by CSS variables on `html[data-theme="light"]` (see `crates/lumenflow_ui/src/index.css`). Use the same Tailwind class names (`bg-obsidian`, `text-primary`, `border-edge`, etc.); values swap automatically. Approximate light equivalents:
+
+| Token         | Hex (approx.) | Notes                                      |
+| ------------- | ------------- | ------------------------------------------ |
+| Background    | `#F5F5F6`     | Off-white; reduces glare vs pure white     |
+| Surface       | `#EDEDEF`     | Cards and panels                           |
+| Border        | `#D4D4D8`     | Stronger edges for sunlight readability   |
+| Cyber Teal    | `#0F766E`     | Darker teal on light surfaces (WCAG AA)    |
+| Text primary  | `#171717`     | Body and headings                          |
+| Text secondary| `#52525B`     | Labels                                     |
+
+Canvas views (`themePalette.ts`) mirror these choices for heatmaps and charts.
+
+### Tailwind config (implementation)
+
+Colors in `tailwind.config.js` map to CSS variables for alpha modifiers, e.g. `obsidian: "rgb(var(--lf-obsidian) / <alpha-value>)"`. Define `--lf-*` RGB triplets in `index.css` for `html[data-theme="dark"]` and `html[data-theme="light"]`.
+
+Legacy fixed-hex example (dark only), for reference:
 
 ```js
 obsidian: "#0B0B0B",

@@ -98,8 +98,8 @@ pub async fn run(
         let time_ms = start.elapsed().as_secs_f64() * 1000.0;
 
         for uni in 0..universes {
-            for ch in 0..CHANNEL_COUNT {
-                dmx_buf[ch] = pattern(ch, time_ms);
+            for (ch, slot) in dmx_buf.iter_mut().enumerate().take(CHANNEL_COUNT) {
+                *slot = pattern(ch, time_ms);
             }
             sequence = sequence.wrapping_add(1);
             let pkt = build_art_dmx(uni, sequence, &dmx_buf);

@@ -1,30 +1,96 @@
 # Virtual Art-Net network for LumenFlow testing.
-# Usage: docker compose -f docker-compose.virtual-network.yml up
 #
-# Run LumenFlow with: pnpm run dev:docker
-# (or set LUMENFLOW_DISCOVERY_TARGETS=127.0.0.1:6455,127.0.0.1:6456,127.0.0.1:6457)
+# Host ports for LumenFlow unicast discovery must stay in sync with:
+#   scripts/virtual-network.ports.env  and  package.json "dev:docker"
+#
+# Usage:
+#   ./scripts/spawn-virtual-network.sh --docker
+#   ./scripts/spawn-virtual-network.sh --docker -- --detach
+#
+# Run LumenFlow: pnpm run dev:docker
+# (loads LUMENFLOW_DISCOVERY_TARGETS from virtual-network.ports.env via npm)
 
 services:
   console-a:
     build: .
-    command: virtual-console --name "Desk A" --ip 10.0.0.10 --universes 8 --rate 44 --pattern sine --target host.docker.internal
+    command:
+      - virtual-console
+      - --name
+      - Desk A
+      - --ip
+      - 10.0.0.10
+      - --universes
+      - "8"
+      - --rate
+      - "44"
+      - --pattern
+      - sine
+      - --target
+      - host.docker.internal
+      - --sync-target
+      - 10.255.255.255:6454
+      - --physical
+      - "0"
     ports:
       - "6455:6454/udp"
+    networks:
+      artnet_lab:
+        ipv4_address: 10.0.0.10
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   console-b:
     build: .
-    command: virtual-console --name "Desk B" --ip 10.0.0.11 --universes 8 --rate 44 --pattern chase --target host.docker.internal
+    command:
+      - virtual-console
+      - --name
+      - Desk B
+      - --ip
+      - 10.0.0.11
+      - --universes
+      - "8"
+      - --rate
+      - "44"
+      - --pattern
+      - chase
+      - --target
+      - host.docker.internal
+      - --sync-target
+      - 10.255.255.255:6454
+      - --physical
+      - "1"
     ports:
       - "6456:6454/udp"
+    networks:
+      artnet_lab:
+        ipv4_address: 10.0.0.11
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   node:
     build: .
-    command: virtual-node --name "Virtual Node 1" --ip 10.0.0.20 --port 6454 --target host.docker.internal
+    command:
+      - virtual-node
+      - --profile
+      - swisson-xnd8
+      - --ip
+      - 10.0.0.20
+      - --port
+      - "6454"
+      - --target
+      - host.docker.internal
     ports:
       - "6457:6454/udp"
+    networks:
+      artnet_lab:
+        ipv4_address: 10.0.0.20
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+networks:
+  artnet_lab:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+          gateway: 10.0.0.1

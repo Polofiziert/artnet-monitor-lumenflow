@@ -10,6 +10,7 @@ import {
 } from "solid-js";
 import DmxGridCanvas from "./DmxGridCanvas";
 import FloatingPopover from "./FloatingPopover";
+import { useTheme } from "../hooks/useTheme";
 import Sparkline from "./Sparkline";
 import SourceSyncPanel from "./SourceSyncPanel";
 import { globalHistory } from "../lib/channelHistory";
@@ -55,6 +56,7 @@ function computeStdDev(buf: Float32Array, start: number, end: number): number {
 }
 
 const ChannelInspector: Component<ChannelInspectorProps> = (props) => {
+  const theme = useTheme();
   const [hoveredChannel, setHoveredChannel] = createSignal<number | null>(null);
   const [selectedChannel, setSelectedChannel] = createSignal<number | null>(
     null
@@ -126,9 +128,10 @@ const ChannelInspector: Component<ChannelInspectorProps> = (props) => {
     <div data-testid="channel-inspector" class="flex flex-col gap-4">
       {/* Header */}
       <div class="rounded-lg border border-edge bg-surface p-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <h2 class="text-sm font-medium uppercase tracking-wide text-secondary">
+        {/* Title left; metrics fixed-width strip right (justify-between — widths stable, no jump). */}
+        <div class="flex w-full min-w-0 items-center justify-between gap-3">
+          <div class="flex min-w-0 flex-wrap items-center gap-3">
+            <h2 class="truncate text-sm font-medium uppercase tracking-wide text-secondary">
               Universe {props.universeId}
             </h2>
             <span
@@ -160,7 +163,7 @@ const ChannelInspector: Component<ChannelInspectorProps> = (props) => {
               )}
             </Show>
           </div>
-          <div class="flex items-center gap-4">
+          <div class="flex flex-shrink-0 items-center gap-3">
             <div class="flex items-center gap-1 rounded-md border border-edge bg-obsidian">
               <button
                 onClick={() => setGridCols(16)}
@@ -183,18 +186,49 @@ const ChannelInspector: Component<ChannelInspectorProps> = (props) => {
                 32
               </button>
             </div>
-            <span class="text-xs tabular-nums text-muted">
+            <span
+              class="inline-block w-[10ch] text-right font-mono text-xs tabular-nums text-muted"
+              title="Count of channels with a non-zero value"
+            >
               {activeChannelCount()} active
             </span>
-            <span class="font-mono text-xs tabular-nums text-muted">
+            <span
+              class="inline-block w-[8ch] text-right font-mono text-xs tabular-nums text-muted"
+              title="Mean channel value (0–255)"
+            >
               avg {avgValue()}
             </span>
-            <Show when={flickerCount() > 0}>
-              <span class="flex items-center gap-1 text-xs text-amber">
-                <span class="h-1.5 w-1.5 rounded-full bg-amber animate-flicker" />
-                {flickerCount()} flicker
-              </span>
-            </Show>
+            {/* Fixed width + same structure for 0 vs N: no layout shift; teal = clean, amber = warning */}
+            <div
+              class="flex w-[13ch] flex-shrink-0 items-center justify-end"
+              data-testid="channel-inspector-header-flicker-slot"
+            >
+              <Show
+                when={flickerCount() > 0}
+                fallback={
+                  <span
+                    class="flex items-center gap-1 font-mono text-xs tabular-nums text-teal"
+                    title="No flickering channels detected (variance below threshold)"
+                  >
+                    <span
+                      class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal/70"
+                      aria-hidden
+                    />
+                    <span class="inline-block w-[3ch] text-right">0</span>
+                    <span class="text-teal-dim">flicker</span>
+                  </span>
+                }
+              >
+                <span
+                  class="flex items-center gap-1 font-mono text-xs tabular-nums text-amber"
+                  title="Channels flagged as flickering (high variance)"
+                >
+                  <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber animate-flicker" />
+                  <span class="inline-block w-[3ch] text-right">{flickerCount()}</span>
+                  <span>flicker</span>
+                </span>
+              </Show>
+            </div>
           </div>
         </div>
       </div>
@@ -283,6 +317,7 @@ const ChannelInspector: Component<ChannelInspectorProps> = (props) => {
                 selectedChannel={selectedChannel}
                 onHover={setHoveredChannel}
                 onSelect={setSelectedChannel}
+                resolvedTheme={theme.effective}
               />
 
               <div class="mt-2 flex items-center gap-4 text-[10px] text-muted">
