@@ -127,5 +127,10 @@ This happens with the spawn-virtual-network script running.
   - When there is an error in the timecode packets, the dot gets red.
 - A button for OpTimeSync 0x9800 would be nice so we can sync the time with the click of a button.
   - mayby one button for that in the devices tap
-  - mayby one button integratted in the system clock in the top bar of lumenflow  
+  - mayby one button integratted in the system clock in the top bar of lumenflow
+- In the Protocol, core layer, the NodeReport of an ArtPollReply Packet doesnt get rendered properly. 
+  - for every new art pollReply from an node the text should update in the Devices tab, so in the "Node Report#0001 [0120] Power on tests successful" the counter goes up.
+- In Devices tab, the green dots before an the prot name in the list should flash with every ne incoming artPollReply. When bindIndex is used it should only flash once for every bundle of ArtPollReply packets.
+  - this is to indicate the ongoing reports to Luumenflow
+- In the Settings, there should be a switch between "Send dignostic" unicast and Broadcast. for the ArtPoll packets from lumenflow
 
