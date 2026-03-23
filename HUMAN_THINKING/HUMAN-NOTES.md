@@ -141,3 +141,42 @@ This happens with the spawn-virtual-network script running.
   - this is to indicate the ongoing reports to Luumenflow
 - In the Settings, there should be a switch between "Send dignostic" unicast and Broadcast. for the ArtPoll packets from lumenflow
 
+# Release v0.3.0
+
+## Network hardening
+
+What happens when a cable is rippd out and a device dissaperas from network? when, for example a technician falls over a cable and ripps it out
+
+- Send a warning when a Device previosly replying to artPoll doesnt reply anymore
+
+What happens when a node suddenly changes its Ip address? how can we show it as the same node, and how do we inform the user?
+
+- identify devices also by MacAddress, report to the user that the ip has changed of one node. first thoru a notification, then throu a symbol next to the device name in the device tap.
+
+What when two persons simultaniosly patch a device? 
+
+- check for artAddress commands while the user is typing new names for a device or trys to route dmx universes. When the value changes while editing display a warning
+- after the user hits enter, display a loading circle in the field and only show a ok sign when the next artPollReply confirms the change, else send a warning after timeout.
+
+
+
+- Inforamtion when artDMX packets come without sequence or out of order.
+
+
+
+Jitter Graphs per universe where they show jitter between to artDMX packets from that universe, so artDMX sequence=1 and artDMX sequence=2 are messured in that graph.
+
+## Event Reporting
+
+A message center for important events is missing
+
+- the message center should show messages for
+  - Devices
+    - new device discovered
+    - device disconnected
+    - ip address changed
+    - long name changed
+    - port name changed
+    - patch changed
+    - status changed
+
