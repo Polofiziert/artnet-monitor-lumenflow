@@ -40,6 +40,17 @@ Have a nice day :D
 - channel graph is missaligned to the right a little bit.
   - no the line doesnt fill the graph comleatly
   - it desnt start at the beginning left of the graph but ends on its right end
+- a overhall of the system window menue from the os is nececairy, a plan needs to be made what there should be in.
+  - View should have the Dashboard, Inspector, Matrix, Devices taps as field with Keyboard shortcuts as Grey comments bhind it.
+  - Settings also should be accecible from there.
+  - What else is needed? Think about it ...
+- in the window menu the help section is missing. it needs to have a search and detailed help manual accesible from there. Follow best practices. 
+  - explaine the Features of the Program
+  - where protocol related things are present in the manual, reffer to the Art-Net 4Spec with page numbers.
+  - Help manual for users needs to be written, should be accessible from the help window menu.  
+  -> what show the charts  
+  -> how works the routing matrix  
+  -> ...
 
 #### Needs Testing / Observation
 
@@ -49,10 +60,6 @@ This happens with the spawn-virtual-network script running.
 ### To been Implemented
 
 - tool tips should be there for nearly everything on hovering over things, on log hovering it should behave like VSCODE function definitions with more extendet information.
-- a overhall of the system window menue from the os is nececairy, a plan needs to be made what there should be in.
-  - View should have the Dashboard, Inspector, Matrix, Devices taps as field with Keyboard shortcuts as Grey comments bhind it.
-  - Settings also should be accecible from there.
-  - What else is needed? Think about it ...
 - in the window menu the help section is missing. it needs to have a search and detailed help manual accesible from there. Follow best practices. 
   - explaine the Features of the Program
   - where protocol related things are present in the manual, reffer to the Art-Net 4Spec with page numbers.
