@@ -1,8 +1,9 @@
 import type { Component } from "solid-js";
-import { createSignal, createMemo, For, Show } from "solid-js";
+import { createSignal, createMemo, createEffect, For, Show, onCleanup } from "solid-js";
 import IpProgDialog from "./IpProgDialog";
 import { open } from "@tauri-apps/plugin-shell";
 import { useDiagLog, priorityColor, priorityLabel } from "../hooks/useDiagLog";
+import type { PollReplyActivity } from "../hooks/useDevices";
 
 /** Art-Net 4 DataRequest types for URL fetching */
 const DR_URL_PRODUCT = 0x0001;
@@ -56,11 +57,48 @@ interface DeviceListProps {
   mockProducts?: ArtNetProductDto[] | undefined;
   /** D5: shared product store from useDevices (`get_artnet_products`). */
   products?: () => ArtNetProductDto[];
+  /** Per-product ArtPollReply activity (one pulse per bind bundle). */
+  pollReplyActivity?: () => Record<string, PollReplyActivity>;
   /** D2: Manually added devices; merged with backend products. */
   manualDevices?: ManualDeviceEntry[];
   onAddManualDevice?: (ip: string, name?: string) => void;
   onRemoveManualDevice?: (ip: string) => void;
 }
+
+interface PollReplyPulseDotProps {
+  activity?: PollReplyActivity;
+  tooltip: string;
+  testId?: string;
+}
+
+const PollReplyPulseDot: Component<PollReplyPulseDotProps> = (props) => {
+  const [burst, setBurst] = createSignal(false);
+  let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
+  createEffect(() => {
+    const nonce = props.activity?.pulseNonce ?? 0;
+    if (nonce <= 0) return;
+    setBurst(false);
+    queueMicrotask(() => setBurst(true));
+    if (resetTimer !== undefined) clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => setBurst(false), 460);
+  });
+
+  onCleanup(() => {
+    if (resetTimer !== undefined) clearTimeout(resetTimer);
+  });
+
+  return (
+    <span
+      data-testid={props.testId}
+      class="h-1.5 w-1.5 rounded-full bg-teal transition-all duration-150"
+      classList={{
+        "scale-150 shadow-[0_0_8px_#2DD4BF99]": burst(),
+      }}
+      title={props.tooltip}
+    />
+  );
+};
 
 /** Manual-only row (no ArtPollReply yet). */
 function syntheticProduct(entry: ManualDeviceEntry): ArtNetProductDto {
@@ -140,6 +178,22 @@ const DeviceList: Component<DeviceListProps> = (props) => {
         if (aOnline !== bOnline) return aOnline - bOnline;
         return a.ip_address.localeCompare(b.ip_address);
       });
+  });
+
+  const nodeOrdinalById = createMemo(() => {
+    const stableOrder = [...mergedProducts()].sort((a, b) => {
+      const aKey = `${a.mac_address || "ZZ:ZZ:ZZ:ZZ:ZZ:ZZ"}|${a.product_id}|${a.ip_address}`;
+      const bKey = `${b.mac_address || "ZZ:ZZ:ZZ:ZZ:ZZ:ZZ"}|${b.product_id}|${b.ip_address}`;
+      return aKey.localeCompare(bKey);
+    });
+    const map = new Map<string, number>();
+    let next = 1;
+    for (const d of stableOrder) {
+      if (d.long_name === "Manual entry") continue;
+      map.set(d.product_id, next);
+      next += 1;
+    }
+    return map;
   });
 
   const connectedDevices = createMemo(() => filteredDevices().filter((d) => d.online !== false));
@@ -223,6 +277,47 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     return log.entries.filter((e) => e.sourceIp === ip).slice(-120).reverse();
   });
 
+  const pollActivityFor = (productId: string) =>
+    props.pollReplyActivity?.()[productId];
+
+  const deviceDisplayTitle = (device: ArtNetProductDto): string => {
+    if (device.long_name === "Manual entry") {
+      return device.short_name || "Manual entry";
+    }
+    const base =
+      device.long_name.trim() ||
+      device.short_name.trim() ||
+      "Unknown Device";
+    const ordinal = nodeOrdinalById().get(device.product_id);
+    return ordinal != null ? `${base} [${ordinal}]` : base;
+  };
+
+  const pulseTooltip = (device: ArtNetProductDto): string => {
+    const activity = pollActivityFor(device.product_id);
+    if (!activity) {
+      return "No ArtPollReply activity observed yet for this node in the current session.";
+    }
+    const lastSeenIso = new Date(activity.lastReceivedAtMs).toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    return [
+      "ArtPollReply activity indicator",
+      "",
+      `Node: ${activity.shortName || device.short_name || "Unknown Device"}`,
+      `IP: ${activity.ipAddress}`,
+      `Bind IP: ${activity.bindIp}`,
+      `Last bundle: ${lastSeenIso}`,
+      `Last bindIndex in bundle: ${activity.lastBindIndex}`,
+      `Bundle dedup window: ${activity.bundleWindowMs} ms`,
+      `PollReply bundles observed (deduped): ${activity.bundleCount}`,
+      "",
+      "Behavior: flash is triggered by deduped PollReply bundle events.",
+    ].join("\n");
+  };
+
   return (
     <div data-testid="device-list" class="rounded-lg border border-edge bg-surface p-4">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -289,8 +384,12 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                     <div class="flex items-center justify-between gap-2">
                       <button type="button" onClick={() => selectDevice(device)} class="min-w-0 flex-1 text-left">
                         <div class="flex items-center gap-2">
-                          <span class="h-1.5 w-1.5 rounded-full bg-teal" />
-                          <span class="truncate text-sm text-primary">{device.short_name || "Unknown Device"}</span>
+                          <PollReplyPulseDot
+                            activity={pollActivityFor(device.product_id)}
+                            tooltip={pulseTooltip(device)}
+                            testId={`poll-reply-dot-${device.product_id}`}
+                          />
+                          <span class="truncate text-sm text-primary">{deviceDisplayTitle(device)}</span>
                           <span class="rounded bg-teal/10 px-1.5 py-0.5 text-[10px] font-mono text-teal">{device.ports.length}p</span>
                         </div>
                         <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted font-mono">
@@ -333,7 +432,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                     <button type="button" onClick={() => selectDevice(device)} class="min-w-0 flex-1 text-left">
                       <div class="flex items-center gap-2">
                         <span class="h-1.5 w-1.5 rounded-full bg-amber" />
-                        <span class="truncate text-sm text-secondary">{device.short_name || "Unknown Device"}</span>
+                        <span class="truncate text-sm text-secondary">{deviceDisplayTitle(device)}</span>
                         <Show when={device.long_name === "Manual entry"}>
                           <span class="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] text-amber">Manual</span>
                         </Show>
@@ -367,7 +466,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
             {(device) => (
               <>
                 <div class="mb-2">
-                  <div class="text-sm text-primary truncate">{device().short_name || "Unknown Device"}</div>
+                  <div class="text-sm text-primary truncate">{deviceDisplayTitle(device())}</div>
                   <div class="text-[11px] font-mono text-muted">{device().ip_address}</div>
                 </div>
 

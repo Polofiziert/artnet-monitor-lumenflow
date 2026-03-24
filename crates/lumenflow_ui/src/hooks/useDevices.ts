@@ -1,4 +1,5 @@
 import { createSignal, createEffect, onCleanup } from "solid-js";
+import { createStore } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ArtNetProductDto } from "../components/DeviceList";
@@ -15,6 +16,27 @@ type DevicesUpdatedEvent = {
   products: ArtNetProductDto[];
 };
 
+type DevicePollReplyActivityEvent = {
+  product_id: string;
+  ip_address: string;
+  bind_ip: string;
+  bind_index: number;
+  short_name: string;
+  received_at_nanos: number;
+  bundle_window_ms: number;
+};
+
+export type PollReplyActivity = {
+  pulseNonce: number;
+  lastReceivedAtMs: number;
+  lastBindIndex: number;
+  ipAddress: string;
+  bindIp: string;
+  shortName: string;
+  bundleWindowMs: number;
+  bundleCount: number;
+};
+
 interface UseDevicesOptions {
   enabled: () => boolean;
   shouldPoll: () => boolean;
@@ -27,6 +49,9 @@ let cacheUpdatedAt = 0;
 
 export function useDevices(options: UseDevicesOptions) {
   const [products, setProducts] = createSignal<ArtNetProductDto[]>(cacheProducts);
+  const [pollReplyActivity, setPollReplyActivity] = createStore<
+    Record<string, PollReplyActivity>
+  >({});
   const [isLoading, setIsLoading] = createSignal(false);
   const [lastUpdatedAt, setLastUpdatedAt] = createSignal(cacheUpdatedAt);
   const [error, setError] = createSignal<string | null>(null);
@@ -78,18 +103,60 @@ export function useDevices(options: UseDevicesOptions) {
   createEffect(() => {
     if (!options.enabled()) return;
     let unlisten: (() => void) | undefined;
+    let disposed = false;
     listen<DevicesUpdatedEvent>("devices-updated", (evt) => {
       const payload = evt.payload;
       if (!payload || !Array.isArray(payload.products)) return;
       applyProducts(payload.products);
     })
       .then((fn) => {
+        if (disposed) {
+          fn();
+          return;
+        }
         unlisten = fn;
       })
       .catch(() => {
         // Keep fallback polling path active if event subscription fails.
       });
     onCleanup(() => {
+      disposed = true;
+      unlisten?.();
+    });
+  });
+
+  createEffect(() => {
+    if (!options.enabled()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    listen<DevicePollReplyActivityEvent>("device-poll-reply-activity", (evt) => {
+      const payload = evt.payload;
+      if (!payload || !payload.product_id) return;
+      const receivedAtMs = Math.floor(payload.received_at_nanos / 1_000_000);
+      const prior = pollReplyActivity[payload.product_id];
+      setPollReplyActivity(payload.product_id, {
+        pulseNonce: (prior?.pulseNonce ?? 0) + 1,
+        lastReceivedAtMs: receivedAtMs,
+        lastBindIndex: payload.bind_index,
+        ipAddress: payload.ip_address,
+        bindIp: payload.bind_ip,
+        shortName: payload.short_name,
+        bundleWindowMs: payload.bundle_window_ms,
+        bundleCount: (prior?.bundleCount ?? 0) + 1,
+      });
+    })
+      .then((fn) => {
+        if (disposed) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+      })
+      .catch(() => {
+        // Optional activity indicator path only; silently degrade.
+      });
+    onCleanup(() => {
+      disposed = true;
       unlisten?.();
     });
   });
@@ -98,6 +165,7 @@ export function useDevices(options: UseDevicesOptions) {
 
   return {
     products,
+    pollReplyActivity: () => pollReplyActivity,
     isLoading,
     isStale,
     lastUpdatedAt,

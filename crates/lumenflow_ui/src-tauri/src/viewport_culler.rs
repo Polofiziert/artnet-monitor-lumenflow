@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -122,6 +123,46 @@ pub struct DevicesUpdatedDto {
     pub version: u64,
     pub timestamp_nanos: u64,
     pub products: Vec<ArtNetProductDto>,
+}
+
+/// Activity pulse for ArtPollReply reception (one per deduplicated bind bundle).
+#[derive(Clone, serde::Serialize)]
+pub struct DevicePollReplyActivityDto {
+    pub product_id: String,
+    pub ip_address: String,
+    pub bind_ip: String,
+    pub bind_index: u8,
+    pub short_name: String,
+    pub received_at_nanos: u64,
+    pub bundle_window_ms: u64,
+}
+
+const POLL_REPLY_BUNDLE_WINDOW_MS: u64 = 180;
+const POLL_REPLY_BUNDLE_STATE_TTL_SECS: u64 = 10;
+
+fn should_emit_poll_reply_bundle(
+    now: Instant,
+    product_id: &str,
+    bundle_state: &mut HashMap<String, Instant>,
+) -> bool {
+    let window = Duration::from_millis(POLL_REPLY_BUNDLE_WINDOW_MS);
+    match bundle_state.get(product_id) {
+        Some(last) => now.saturating_duration_since(*last) > window,
+        None => true,
+    }
+}
+
+fn note_emitted_poll_reply_bundle(
+    now: Instant,
+    product_id: &str,
+    bundle_state: &mut HashMap<String, Instant>,
+) {
+    bundle_state.insert(product_id.to_string(), now);
+}
+
+fn prune_bundle_state(now: Instant, bundle_state: &mut HashMap<String, Instant>) {
+    let ttl = Duration::from_secs(POLL_REPLY_BUNDLE_STATE_TTL_SECS);
+    bundle_state.retain(|_, last| now.saturating_duration_since(*last) <= ttl);
 }
 
 fn format_hex_bytes(bytes: &[u8]) -> String {
@@ -696,6 +737,8 @@ async fn run_udp_listener(
         device_version.fetch_add(1, Ordering::Relaxed);
     }
 
+    let mut poll_reply_bundle_state: HashMap<String, Instant> = HashMap::new();
+    let mut poll_reply_packet_counter: u64 = 0;
     loop {
         tokio::select! {
             biased;
@@ -786,15 +829,27 @@ async fn run_udp_listener(
                         if is_self {
                             tracing::trace!(ip = %device_ip, "Ignoring ArtPollReply from self");
                         } else {
+                            let bind_ip = std::net::Ipv4Addr::new(
+                                reply.bind_ip[0],
+                                reply.bind_ip[1],
+                                reply.bind_ip[2],
+                                reply.bind_ip[3],
+                            );
+                            let product_id = artnet_product_id(bind_ip, &reply.mac);
+                            let now = std::time::Instant::now();
+                            let emit_activity = should_emit_poll_reply_bundle(
+                                now,
+                                &product_id,
+                                &mut poll_reply_bundle_state,
+                            );
+                            poll_reply_packet_counter = poll_reply_packet_counter.wrapping_add(1);
+                            if poll_reply_packet_counter % 128 == 0 {
+                                prune_bundle_state(now, &mut poll_reply_bundle_state);
+                            }
                             let device = DeviceInfo {
                                 mac_address: reply.mac,
                                 ip_address: device_ip,
-                                bind_ip: std::net::Ipv4Addr::new(
-                                    reply.bind_ip[0],
-                                    reply.bind_ip[1],
-                                    reply.bind_ip[2],
-                                    reply.bind_ip[3],
-                                ),
+                                bind_ip,
                                 bind_index: reply.bind_index,
                                 port: u16::from_le_bytes(reply.port),
                                 short_name: reply.short_name_str().to_string(),
@@ -837,6 +892,23 @@ async fn run_udp_listener(
                             );
                             device_registry.upsert(device);
                             device_version.fetch_add(1, Ordering::Relaxed);
+                            if emit_activity {
+                                note_emitted_poll_reply_bundle(
+                                    now,
+                                    &product_id,
+                                    &mut poll_reply_bundle_state,
+                                );
+                                let payload = DevicePollReplyActivityDto {
+                                    product_id,
+                                    ip_address: device_ip.to_string(),
+                                    bind_ip: bind_ip.to_string(),
+                                    bind_index: reply.bind_index,
+                                    short_name: reply.short_name_str().to_string(),
+                                    received_at_nanos: epoch_nanos(),
+                                    bundle_window_ms: POLL_REPLY_BUNDLE_WINDOW_MS,
+                                };
+                                let _ = app_handle.emit("device-poll-reply-activity", payload);
+                            }
                         }
                     }
                     Ok(lumenflow_core::ArtNetPacket::Sync(_)) => {
@@ -1165,5 +1237,18 @@ mod tests {
         let err =
             parse_optional_ipv4(Some("999.1.1.1"), "new_ip").expect_err("invalid IPv4 should error");
         assert!(err.contains("Invalid new_ip"));
+    }
+
+    #[test]
+    fn poll_reply_bundle_dedup_emits_once_within_window() {
+        let mut state: HashMap<String, Instant> = HashMap::new();
+        let key = "10.0.0.10|001122334455";
+        let t0 = Instant::now();
+        assert!(should_emit_poll_reply_bundle(t0, key, &mut state));
+        note_emitted_poll_reply_bundle(t0, key, &mut state);
+        let t1 = t0 + Duration::from_millis(POLL_REPLY_BUNDLE_WINDOW_MS / 2);
+        assert!(!should_emit_poll_reply_bundle(t1, key, &mut state));
+        let t2 = t0 + Duration::from_millis(POLL_REPLY_BUNDLE_WINDOW_MS + 5);
+        assert!(should_emit_poll_reply_bundle(t2, key, &mut state));
     }
 }

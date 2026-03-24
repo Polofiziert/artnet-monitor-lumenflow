@@ -936,6 +936,7 @@ const App: Component = () => {
                   mockProducts={isMockMode() ? mockProducts() : undefined}
                   {...(!isMockMode() && {
                     products: realDevicesStore.products,
+                    pollReplyActivity: realDevicesStore.pollReplyActivity,
                     manualDevices: manualDevices(),
                     onAddManualDevice: addManualDevice,
                     onRemoveManualDevice: removeManualDevice,

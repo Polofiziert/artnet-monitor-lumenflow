@@ -37,6 +37,34 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
   const routes = () => props.routes?.() ?? [];
   const products = () => props.products?.() ?? [];
 
+  const nodeOrdinalById = createMemo(() => {
+    const stableOrder = [...products()].sort((a, b) => {
+      const aKey = `${a.mac_address || "ZZ:ZZ:ZZ:ZZ:ZZ:ZZ"}|${a.product_id}|${a.ip_address}`;
+      const bKey = `${b.mac_address || "ZZ:ZZ:ZZ:ZZ:ZZ:ZZ"}|${b.product_id}|${b.ip_address}`;
+      return aKey.localeCompare(bKey);
+    });
+    const map = new Map<string, number>();
+    let next = 1;
+    for (const d of stableOrder) {
+      if (d.long_name === "Manual entry") continue;
+      map.set(d.product_id, next);
+      next += 1;
+    }
+    return map;
+  });
+
+  const deviceDisplayTitle = (device: ArtNetProductDto): string => {
+    if (device.long_name === "Manual entry") {
+      return device.short_name || "Manual entry";
+    }
+    const base =
+      device.long_name.trim() ||
+      device.short_name.trim() ||
+      "Unknown Device";
+    const ordinal = nodeOrdinalById().get(device.product_id);
+    return ordinal != null ? `${base} [${ordinal}]` : base;
+  };
+
   const deviceByIp = createMemo(() => {
     const map = new Map<string, ArtNetProductDto>();
     for (const p of products()) map.set(p.ip_address, p);
@@ -179,7 +207,7 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
                 >
                   <div class="flex flex-col items-center min-w-0">
                     <span class="text-[11px] font-medium text-primary truncate max-w-[120px]">
-                      {dev.short_name}
+                      {deviceDisplayTitle(dev)}
                     </span>
                     <span class="text-[9px] font-mono text-muted truncate">
                       {dev.ip_address}
@@ -235,7 +263,7 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
                     </div>
                     <div class="flex flex-col min-w-0">
                       <span class="text-[11px] font-medium text-primary truncate">
-                        {tx.device?.short_name ?? "Unknown"}
+                        {tx.device ? deviceDisplayTitle(tx.device) : "Unknown"}
                       </span>
                       <span class="text-[9px] font-mono text-muted">
                         {tx.ip}

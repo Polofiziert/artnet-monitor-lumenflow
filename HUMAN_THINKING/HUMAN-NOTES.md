@@ -27,6 +27,8 @@ Have a nice day :D
   - it should be one of the first settings
   - it should be changeble from dark to light to system
 - in the top bar the status ok and warning isnt telling much. this short indicator is good but it needs a tool tip with the informtion on wich the status ok / warning label changes. so the user knows what it means.
+- In Devices tab, the green dots before an the prot name in the list should flash with every ne incoming artPollReply. When bindIndex is used it should only flash once for every bundle of ArtPollReply packets.
+  - this is to indicate the ongoing reports to Luumenflow
 
 ### Partialy Implemented
 
@@ -85,8 +87,6 @@ This happens with the spawn-virtual-network script running.
   - The buttons for all devices at once are also toggls and respect the indivduls LED settings. meaning when two devices are LED-Muted and One is LED-Normal, the All-devices-identify toggle sets the LED-Identify for all devices on activation, and rests to riginal state on deactivation. so all three devices LED-Identify, and then again two are LED-Muted and one is LED-Normal.
   - the buttons only show toggle effects when the artPollReply of the device show that the ArtAddress packet from us was read. when it doesnt, a small warning should inform the user that we tryed but the devices doesnt wanted.
   - this is the same for all datamodles of the device, incoming artPollReply data overseeds the programmed data. when artPollReply data doenst change, this is an error on the device side and its state doesnt change. so we need to reflect that and or data modle of the device stays true to device state.
-- In Devices tab, the green dots before an the prot name in the list should flash with every ne incoming artPollReply. When bindIndex is used it should only flash once for every bundle of ArtPollReply packets.
-  - this is to indicate the ongoing reports to Luumenflow
 
 #### Other tabs
 
@@ -185,6 +185,14 @@ A message center for important events is missing
     - status changed
 
 ## UI / UX
+
+
+
+
+
+## Warnings
+
+- TopBar: Think about the criteria for Warning and ok
 
 
 

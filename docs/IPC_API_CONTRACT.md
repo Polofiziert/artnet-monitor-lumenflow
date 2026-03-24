@@ -68,6 +68,7 @@ This document defines the complete contract between the Tauri/Rust backend and t
 | `route-info`       | BE → FE   | `number[]` (binary) | ~10Hz      | Per-universe source IPs, pkt/s, lastSeen. See §4.3.  |
 | `jitter-samples`   | BE → FE   | JSON `number[]`     | ~10Hz      | Inter-packet arrival intervals in ms. See §4.4.      |
 | `devices-updated`  | BE → FE   | JSON `DevicesUpdatedDto` | On change (~10Hz max emit block) | Push snapshot of **products** (`ArtNetProductDto[]`) when registry version changes. |
+| `device-poll-reply-activity` | BE → FE | JSON `DevicePollReplyActivityDto` | On deduped PollReply bundle | Per-product ArtPollReply activity pulse for Devices UI (bind bundle deduped). |
 | `diag-entry`       | BE → FE   | JSON                | On receipt | Single diagnostic message from ArtDiagData.          |
 | `timecode`         | BE → FE   | JSON                | On receipt | SMPTE/EBU timecode from ArtTimeCode.                 |
 | `time-sync`        | BE → FE   | JSON                | On receipt | Real-time clock sync from ArtTimeSync.               |
@@ -223,6 +224,7 @@ interface ArtNetProductDto {
   product_id: string; // stable "bindIp|MACHEX" (no colons in MAC segment)
   bind_ip: string;
   ip_address: string;
+  transport_addr?: string | null; // Optional management transport override (NAT/port mapping)
   mac_address: string;
   short_name: string;
   long_name: string;
@@ -242,6 +244,20 @@ interface DevicesUpdatedDto {
   version: number; // monotonic device registry version
   timestamp_nanos: number;
   products: ArtNetProductDto[];
+}
+```
+
+### 5.1c DevicePollReplyActivityDto
+
+```typescript
+interface DevicePollReplyActivityDto {
+  product_id: string; // stable "bindIp|MACHEX"
+  ip_address: string; // sender's advertised node IP
+  bind_ip: string; // Art-Net bind/root IP
+  bind_index: number; // bind page index seen in the bundle
+  short_name: string;
+  received_at_nanos: number; // backend receive time
+  bundle_window_ms: number; // dedupe window applied to bind bundles
 }
 ```
 
