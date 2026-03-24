@@ -110,6 +110,12 @@ const HelpPanel: Component<HelpPanelProps> = (props) => {
               <strong class="text-secondary">Help → Art-Net 4 Specification</strong>{" "}
               to open the official document.
             </p>
+            <p class="mb-2 text-[11px] text-muted">
+              Header system status thresholds: <strong class="text-secondary">WARNING</strong>{" "}
+              when flickering channels &gt; 4 or last jitter sample &gt; 30 ms;{" "}
+              <strong class="text-secondary">ERROR</strong> when no Art-Net data is
+              received for more than 5 seconds.
+            </p>
             <p class="text-[11px] text-muted">
               <strong class="text-secondary">Search:</strong> press{" "}
               <kbd class="rounded bg-obsidian px-1 font-mono text-[10px]">

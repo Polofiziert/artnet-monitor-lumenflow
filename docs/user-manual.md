@@ -37,6 +37,16 @@ Universes are identified by **Net : SubNet : Universe** (Art-Net 15-bit port add
 - **Network Load (Mbps)** — Horizon chart of Art-Net traffic over time. Shows **No data** when there is no traffic.
 - **Inter-Packet Arrival Time (ms)** — Jitter histogram. Shows **No data** when there are no samples.
 
+### Header System Status (OK / Warning / Error)
+
+The top-right header badge is a compact health indicator. Hover it to see a tooltip with the live reason.
+
+- **OK** — No warning/error condition is active: connection is **not disconnected**, flickering channels are **4 or fewer**, and the last jitter sample is **30 ms or lower**.
+- **WARNING** — Triggered when **flickering channels > 4** or the last jitter sample is **> 30 ms**.
+- **ERROR** — Triggered when no Art-Net data has been received for more than **5 seconds**.
+
+These thresholds are derived from the current app logic and are intended as quick operational guidance.
+
 ---
 
 ## 5. Routing Matrix

@@ -414,6 +414,56 @@ const App: Component = () => {
     return "ok";
   };
 
+  const systemStatusTooltip = (): string => {
+    const status = systemStatus();
+    const connection = connectionState();
+    const stats = networkStats();
+    const flickerCount = stats.flickerChannels.length;
+    const lastJitter = stats.jitterSamples[stats.jitterSamples.length - 1] ?? 0;
+
+    if (status === "error") {
+      return [
+        "System status: ERROR",
+        "",
+        "Reason:",
+        "- No Art-Net data has been received for more than 5 seconds.",
+        "- Source may be offline, or the network path is interrupted.",
+        "",
+        "Warning criteria:",
+        "- Flickering channels > 4",
+        "- Last jitter sample > 30 ms",
+      ].join("\n");
+    }
+
+    if (status === "warning") {
+      const reasons: string[] = [];
+      if (flickerCount > 4) reasons.push(`- Flickering channels: ${flickerCount} (> 4)`);
+      if (lastJitter > 30)
+        reasons.push(`- Last inter-packet jitter: ${lastJitter.toFixed(1)} ms (> 30 ms)`);
+
+      return [
+        "System status: WARNING",
+        "",
+        "Triggered by:",
+        ...reasons,
+        "",
+        "OK criteria:",
+        "- Connection is active",
+        "- Flickering channels <= 4",
+        "- Last jitter sample <= 30 ms",
+      ].join("\n");
+    }
+
+    return [
+      "System status: OK",
+      "",
+      "No warning/error condition is active:",
+      `- Connection state: ${connection === "connected" ? "active" : "initializing (not disconnected)"}`,
+      `- Flickering channels: ${flickerCount} (<= 4)`,
+      `- Last inter-packet jitter: ${lastJitter.toFixed(1)} ms (<= 30 ms)`,
+    ].join("\n");
+  };
+
   const showSidebar = () =>
     sidebarOpen() &&
     (activeView() === "dashboard" || activeView() === "inspector");
@@ -474,6 +524,7 @@ const App: Component = () => {
         activeView={activeView}
         onViewChange={(v) => setActiveView(v as ViewId)}
         systemStatus={systemStatus}
+        systemStatusTooltip={systemStatusTooltip}
       />
 
       {/* Body */}

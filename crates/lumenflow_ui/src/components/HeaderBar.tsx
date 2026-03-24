@@ -13,6 +13,7 @@ interface HeaderBarProps {
   activeView: () => string;
   onViewChange: (view: string) => void;
   systemStatus: () => "ok" | "warning" | "error";
+  systemStatusTooltip: () => string;
 }
 
 const tabs: { id: ViewId; label: string; shortcut: string }[] = [
@@ -144,7 +145,9 @@ const HeaderBar: Component<HeaderBarProps> = (props) => {
         <span
           class={`inline-block min-w-[5.5rem] max-w-[5.5rem] truncate text-right text-[10px] font-mono font-medium tracking-wide ${statusColor()}`}
           data-testid="system-status"
-          title={statusLabel()}
+          title={props.systemStatusTooltip()}
+          tabIndex={0}
+          aria-label={props.systemStatusTooltip()}
         >
           {statusLabel()}
         </span>

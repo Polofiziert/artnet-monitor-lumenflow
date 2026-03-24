@@ -26,6 +26,7 @@ Have a nice day :D
   - this setting should live in the settings of lumenflow
   - it should be one of the first settings
   - it should be changeble from dark to light to system
+- in the top bar the status ok and warning isnt telling much. this short indicator is good but it needs a tool tip with the informtion on wich the status ok / warning label changes. so the user knows what it means.
 
 ### Partialy Implemented
 
@@ -61,28 +62,19 @@ Have a nice day :D
 - In the Devicec Tap, when reading current ip setting in the configure ip Modal, error gets thrown: `invalid args` params`for command`send_ip_prog`: command send_ip_prog missing required key params`
 This happens with the spawn-virtual-network script running.
 
-### To been Implemented
 
-- tool tips should be there for nearly everything on hovering over things, on log hovering it should behave like VSCODE function definitions with more extendet information.
-- in the window menu the help section is missing. it needs to have a search and detailed help manual accesible from there. Follow best practices. 
-  - explaine the Features of the Program
-  - where protocol related things are present in the manual, reffer to the Art-Net 4Spec with page numbers.
-  - Help manual for users needs to be written, should be accessible from the help window menu.  
-  -> what show the charts  
-  -> how works the routing matrix  
-  -> ...
-- When hovering over dmx channels in the chanelel grid, the pop over with the channel details pushes the channels of the grid to the side, squisching them and by that changing the channel tile under the mouse creating a flickering of the channel details where they come out and dissapear rapidly.
+
+### To be Implemented
+
+#### Devices Tab
+
 - In the Devices Tab, Changing chageable informations like IP, Long-Name, Port-Name,... Should behave like a form not a modal.
   - with a double click the displayed text should become editable. When pressing enter the value is sent to the Device. For relevant information a warning is shown, espacially for IP and dhcp mode. (everything that can disconnect the device from network and make recovery challenging on site behind stage with time Pressure)
   - the value of the field should allways only display the value of the last ArtPollReply. 
     - When, after editing in ui and sending the ArtAddress packet for changing to new value, the value of the next ArtPollReply doesnt has changend, only a warning like in an registration form should be shown near the field in the device tab.
   - this is the same for all datamodles of the device, incoming artPollReply data overseeds the programmed data. when artPollReply data doenst change, this is an error on the device side and its state doesnt change. so we need to reflect that and or data modle of the device stays true to device state.
     - for this purpose there should stay a "Read-Current" button that reloads all device related data from network. its a redundant thing because lumenflow shouldnt get out of sync with real data but you never know. better save then sorry.
-- in the top bar the status ok and warning isnt telling much. this short indicator is good but it needs a tool tip with the informtion on wich the status ok / warning label changes. so the user knows what it means.
-- in the top bar the search function is a nice idea, but doesnt do anything. make plans for it.
 - in the Devices tap, the listed devices load to long, this is irritatian on the user. 
-- in the channel details when looking at a dmx channel or universe, the output ports should be shown
-  - like the origin node this should be a dropdown with every destination port, its node name, protocol and status should be shown.
 - In the devices tap, there should be LED related Buttons. Once for all devices at once, one for each device seperatly in the device card.
   - a "identify" toggle button should be shown.
     - this button tells with ArtAddress command AcLedLocate that the LEDS of the devices shoud blink.
@@ -93,6 +85,23 @@ This happens with the spawn-virtual-network script running.
   - The buttons for all devices at once are also toggls and respect the indivduls LED settings. meaning when two devices are LED-Muted and One is LED-Normal, the All-devices-identify toggle sets the LED-Identify for all devices on activation, and rests to riginal state on deactivation. so all three devices LED-Identify, and then again two are LED-Muted and one is LED-Normal.
   - the buttons only show toggle effects when the artPollReply of the device show that the ArtAddress packet from us was read. when it doesnt, a small warning should inform the user that we tryed but the devices doesnt wanted.
   - this is the same for all datamodles of the device, incoming artPollReply data overseeds the programmed data. when artPollReply data doenst change, this is an error on the device side and its state doesnt change. so we need to reflect that and or data modle of the device stays true to device state.
+- In Devices tab, the green dots before an the prot name in the list should flash with every ne incoming artPollReply. When bindIndex is used it should only flash once for every bundle of ArtPollReply packets.
+  - this is to indicate the ongoing reports to Luumenflow
+
+#### Other tabs
+
+- tool tips should be there for nearly everything on hovering over things, on log hovering it should behave like VSCODE function definitions with more extendet information.
+- in the window menu the help section is missing. it needs to have a search and detailed help manual accesible from there. Follow best practices. 
+  - explaine the Features of the Program
+  - where protocol related things are present in the manual, reffer to the Art-Net 4Spec with page numbers.
+  - Help manual for users needs to be written, should be accessible from the help window menu.  
+  -> what show the charts  
+  -> how works the routing matrix  
+  -> ...
+- When hovering over dmx channels in the chanelel grid, the pop over with the channel details pushes the channels of the grid to the side, squisching them and by that changing the channel tile under the mouse creating a flickering of the channel details where they come out and dissapear rapidly.
+- in the top bar the search function is a nice idea, but doesnt do anything. make plans for it.
+- in the channel details when looking at a dmx channel or universe, the output ports should be shown
+  - like the origin node this should be a dropdown with every destination port, its node name, protocol and status should be shown.
 - Destination-centric routing matrix (Plan B)
   - Grid
     - Columns: one column per destination = node × output port (flatten ports left→right). Optional column group headers: node name, then ports under it (sticky sub-header on horizontal scroll).
@@ -137,8 +146,6 @@ This happens with the spawn-virtual-network script running.
   - mayby one button integratted in the system clock in the top bar of lumenflow
 - In the Protocol, core layer, the NodeReport of an ArtPollReply Packet doesnt get rendered properly. 
   - for every new art pollReply from an node the text should update in the Devices tab, so in the "Node Report#0001 [0120] Power on tests successful" the counter goes up.
-- In Devices tab, the green dots before an the prot name in the list should flash with every ne incoming artPollReply. When bindIndex is used it should only flash once for every bundle of ArtPollReply packets.
-  - this is to indicate the ongoing reports to Luumenflow
 - In the Settings, there should be a switch between "Send dignostic" unicast and Broadcast. for the ArtPoll packets from lumenflow
 
 # Release v0.3.0
@@ -176,4 +183,8 @@ A message center for important events is missing
     - port name changed
     - patch changed
     - status changed
+
+## UI / UX
+
+
 
