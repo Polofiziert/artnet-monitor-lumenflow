@@ -1,11 +1,40 @@
 ---
 name: spec-compliance
-description: Implement Art-Net 4 OpCode handlers with spec-compliant structs, zerocopy byte-casting, and hex-encoded test packets. Use when implementing new Art-Net OpCodes, adding protocol handlers, parsing Art-Net packets, or when the user mentions Art-Net specifications.
+description: >-
+  Wire-level Art-Net 4: zerocopy packed structs, endianness, ArtNetParser dispatch,
+  hex-encoded unit tests, fuzz targets, and ParseError handling. Use when adding or
+  changing OpCode parsers, packet layouts, or when the user mentions Art-Net bytes,
+  parsing, or the spec document. For multi-packet flows, timeouts, merge policy, and
+  UDP hardening, use art-net-protocol-patterns. Canonical naming traps and spec notes:
+  docs/art-net4.txt and docs/development/ARTNET_PROTOCOL_PATTERNS_DMXW_COMPLIANCE.md.
 ---
 
 # Art-Net 4 Spec-Compliance
 
 Ensures every new OpCode handler strictly follows Art-Net 4 (Artistic Licence) specifications. Uses `#[repr(C, packed)]` structs with `zerocopy` for zero-copy byte-casting, and validates against hex-encoded sample packets.
+
+**Multi-packet behaviour** (discovery windows, verify-after-ArtAddress, DMX merge policy, RDM transaction rules, unstable networks) belongs in [art-net-protocol-patterns](../art-net-protocol-patterns/SKILL.md). This skill stays on the **wire** and **parse** path.
+
+## Project docs (read before inventing field names)
+
+| Document | Use |
+|----------|-----|
+| [docs/art-net4.txt](../../../docs/art-net4.txt) | Authoritative field order and OpCode definitions |
+| [docs/development/ARTNET_PROTOCOL_PATTERNS_DMXW_COMPLIANCE.md](../../../docs/development/ARTNET_PROTOCOL_PATTERNS_DMXW_COMPLIANCE.md) | Spec-cited behaviours and naming traps (e.g. Port Name terminology vs UI `short_name`) |
+| [docs/api/CORE_API.md](../../../docs/api/CORE_API.md) | What `lumenflow_core` parses/builds vs still unimplemented |
+
+## Parser coverage in `ArtNetParser`
+
+Maintain this list when adding `match` arms in `crates/lumenflow_core/src/artnet/mod.rs`:
+
+- **`ParseError::UnknownOpCode(u16)`** — wire value not in `OpCode::from_u16` (see `crates/lumenflow_core/src/artnet/mod.rs` `OpCode` enum).
+- **`ParseError::Unimplemented(u16)`** — value **is** a known `OpCode` but **not** handled in `ArtNetParser::parse` (falls through to `_ => Err(Unimplemented)` after header/version checks). **ArtPollReply** is **not** in that `match`; it uses `poll_reply::parse_poll_reply` first.
+
+**Handled inbound** (subset of `OpCode`): **Poll**, **PollReply** (dedicated path), **Dmx**, **Sync**, **Address**, **Input**, **DiagData**, **TimeCode**, **Command**, **Trigger**, **Nzs**, **IpProg**, **IpProgReply**, **DataRequest**, **DataReply**, **TimeSync**.
+
+**Known `OpCode` variants still `Unimplemented` for inbound parse** (non-exhaustive; confirm against `match opcode` in `mod.rs`): **TodRequest**, **TodData**, **TodControl**, **Rdm**, **RdmSub**, **Media**, **MediaPatch**, **MediaControl**, **MediaContrlReply**, **Directory**, **DirectoryReply**, **VideoSetup**, **VideoPalette**, **VideoData**, **MacMaster**, **MacSlave**, **FirmwareMaster**, **FirmwareReply**, **FileTnMaster**, **FileFnMaster**, **FileFnReply**.
+
+Submodules may still expose **builders** or **partial** parsers for some of these (e.g. TOD helpers in `artnet/tod.rs`); only wire dispatch through `ArtNetParser::parse` counts as “implemented” for `ArtNetPacket` consumers.
 
 ## Workflow
 
@@ -27,14 +56,14 @@ Spec-Compliance Progress:
 
 1. Look up the OpCode in the Art-Net 4 specification document.
 2. Record every field in **exact wire order**: name, byte offset, size, endianness, and valid range.
-3. Check the OpCode enum in `crates/lumenflow_core/src/artnet.rs` — add the variant if missing.
+3. Check the `OpCode` enum in `crates/lumenflow_core/src/artnet/mod.rs` — add the variant if missing.
 4. For field layouts of common OpCodes, see [reference.md](reference.md).
 
 ---
 
 ## Step 2: Define the Wire-Format Struct
 
-Place per-OpCode structs in `crates/lumenflow_core/src/artnet.rs` (or a dedicated submodule if the file grows past ~500 lines).
+Place per-OpCode structs and `parse_*` functions in `crates/lumenflow_core/src/artnet/` (e.g. `dmx.rs`, `poll.rs`, `mod.rs`) — use a submodule when a type grows beyond a manageable size.
 
 ### Template
 

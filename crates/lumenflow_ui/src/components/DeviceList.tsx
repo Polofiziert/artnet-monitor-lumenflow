@@ -10,43 +10,31 @@ const DR_URL_USER_GUIDE = 0x0002;
 const DR_URL_SUPPORT = 0x0003;
 
 type DeviceTab = "overview" | "ports" | "diagnostics" | "comms" | "protocol";
-type DeviceFilter = "all" | "online" | "offline" | "manual" | "warnings";
+type DeviceFilter = "all" | "online" | "offline" | "manual";
 
-export interface DeviceInfoDto {
+export interface ProductPortDto {
+  bind_index: number;
+  slot: number;
+  output_universe: number;
+  input_universe?: number | null;
+  label: string;
+}
+
+/** One physical Art-Net node (merged BindIndex pages). */
+export interface ArtNetProductDto {
+  product_id: string;
+  bind_ip: string;
   ip_address: string;
-  bind_ip?: string;
-  bind_index?: number;
-  port?: number;
+  /** When set (e.g. 127.0.0.1:6457), management packets use this instead of ip_address:6454 (Docker NAT). */
+  transport_addr?: string | null;
   mac_address: string;
   short_name: string;
   long_name: string;
-  node_report?: string;
-  firmware_version: number;
-  ubea_version?: number;
   esta_man: number;
   oem_code: number;
-  net_switch?: number;
-  sub_switch?: number;
-  num_ports?: number;
-  port_types?: number[];
-  good_input?: number[];
-  good_output?: number[];
-  good_output_b?: number[];
-  sw_in?: number[];
-  sw_out?: number[];
-  status1?: number;
-  status2?: number;
-  status3?: number;
-  acn_priority?: number;
-  sw_macro?: number;
-  sw_remote?: number;
-  style?: number;
-  def_resp?: string;
-  user?: string;
-  refresh_rate?: number;
-  port_addresses: number[];
-  input_port_addresses?: number[];
-  /** True if device sent ArtPollReply within the last 3 seconds. Omit for mock devices. */
+  firmware_version: number;
+  node_report: string;
+  ports: ProductPortDto[];
   online?: boolean;
 }
 
@@ -65,27 +53,31 @@ export interface ManualDeviceEntry {
 }
 
 interface DeviceListProps {
-  mockDevices?: DeviceInfoDto[] | undefined;
-  /** D5: shared devices store accessor from useDevices hook. */
-  devices?: () => DeviceInfoDto[];
-  /** D2: Manually added devices; merged with get_devices. */
+  mockProducts?: ArtNetProductDto[] | undefined;
+  /** D5: shared product store from useDevices (`get_artnet_products`). */
+  products?: () => ArtNetProductDto[];
+  /** D2: Manually added devices; merged with backend products. */
   manualDevices?: ManualDeviceEntry[];
   onAddManualDevice?: (ip: string, name?: string) => void;
   onRemoveManualDevice?: (ip: string) => void;
 }
 
-/** Build a synthetic DeviceInfoDto for a manual-only entry. */
-function syntheticDevice(entry: ManualDeviceEntry): DeviceInfoDto {
+/** Manual-only row (no ArtPollReply yet). */
+function syntheticProduct(entry: ManualDeviceEntry): ArtNetProductDto {
+  const ip = entry.ip.trim();
+  const id = `manual|${ip}`;
   return {
-    ip_address: entry.ip,
+    product_id: id,
+    bind_ip: ip,
+    ip_address: ip,
     mac_address: "",
-    short_name: entry.name ?? entry.ip,
+    short_name: entry.name ?? ip,
     long_name: "Manual entry",
-    firmware_version: 0,
     esta_man: 0,
     oem_code: 0,
-    port_addresses: [],
-    input_port_addresses: [],
+    firmware_version: 0,
+    node_report: "",
+    ports: [],
     online: false,
   };
 }
@@ -102,45 +94,44 @@ function hex(value: number, width = 2): string {
 }
 
 const DeviceList: Component<DeviceListProps> = (props) => {
-  const [selectedIp, setSelectedIp] = createSignal<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = createSignal<string | null>(null);
   const [filter, setFilter] = createSignal("");
   const [deviceFilter, setDeviceFilter] = createSignal<DeviceFilter>("all");
   const [detailTab, setDetailTab] = createSignal<DeviceTab>("overview");
   const [ipProgTarget, setIpProgTarget] = createSignal<string | null>(null);
+  /** UDP path for ArtIpProg when discovered via port mapping (e.g. Docker). */
+  const [ipProgTransport, setIpProgTransport] = createSignal<string | null>(null);
   const [deviceUrls, setDeviceUrls] = createSignal<Record<string, DeviceUrls>>({});
   const [addDeviceOpen, setAddDeviceOpen] = createSignal(false);
   const [addDeviceIp, setAddDeviceIp] = createSignal("");
   const [addDeviceName, setAddDeviceName] = createSignal("");
   const log = useDiagLog();
 
-  /** D2: Merge backend devices with manual-only entries (by IP). */
-  const mergedDevices = createMemo(() => {
-    const backend = props.mockDevices ?? props.devices?.() ?? [];
+  /** Merge backend products with manual-only entries (by IP). */
+  const mergedProducts = createMemo(() => {
+    const backend = props.mockProducts ?? props.products?.() ?? [];
     const manual = props.manualDevices ?? [];
     const backendIps = new Set(backend.map((d) => d.ip_address));
     const manualOnly = manual
       .filter((m) => !backendIps.has(m.ip))
-      .map(syntheticDevice);
+      .map(syntheticProduct);
     return [...backend, ...manualOnly];
   });
 
   const filteredDevices = createMemo(() => {
     const q = filter().toLowerCase().trim();
-    return mergedDevices()
+    return mergedProducts()
       .filter((d) => {
         if (deviceFilter() === "online" && d.online === false) return false;
         if (deviceFilter() === "offline" && d.online !== false) return false;
         if (deviceFilter() === "manual" && d.long_name !== "Manual entry") return false;
-        if (deviceFilter() === "warnings") {
-          const hasWarning = (d.status1 ?? 0) !== 0 || (d.status2 ?? 0) !== 0 || (d.status3 ?? 0) !== 0;
-          if (!hasWarning) return false;
-        }
         if (!q) return true;
         return (
           d.short_name.toLowerCase().includes(q) ||
           d.long_name.toLowerCase().includes(q) ||
           d.ip_address.includes(q) ||
-          d.mac_address.toLowerCase().includes(q)
+          d.mac_address.toLowerCase().includes(q) ||
+          d.product_id.toLowerCase().includes(q)
         );
       })
       .sort((a, b) => {
@@ -155,21 +146,21 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   const previouslySeenDevices = createMemo(() => filteredDevices().filter((d) => d.online === false));
 
   const selectedDevice = createMemo(() => {
-    const ip = selectedIp();
-    if (!ip) return undefined;
-    return mergedDevices().find((d) => d.ip_address === ip);
+    const id = selectedProductId();
+    if (!id) return undefined;
+    return mergedProducts().find((d) => d.product_id === id);
   });
 
-  const selectDevice = (device: DeviceInfoDto) => {
-    setSelectedIp(device.ip_address);
+  const selectDevice = (device: ArtNetProductDto) => {
+    setSelectedProductId(device.product_id);
     if (detailTab() === "comms") setDetailTab("overview");
   };
 
-  const fetchDeviceUrls = async (device: DeviceInfoDto) => {
+  const fetchDeviceUrls = async (device: ArtNetProductDto) => {
     const ip = device.ip_address;
     setDeviceUrls((prev) => ({
       ...prev,
-      [ip]: { ...prev[ip], loading: true, error: undefined },
+      [ip]: { ...prev[ip], loading: true },
     }));
 
     const fromCore = await import("@tauri-apps/api/core");
@@ -195,14 +186,13 @@ const DeviceList: Component<DeviceListProps> = (props) => {
         }).catch(() => undefined),
       ]);
 
+      const urls: DeviceUrls = { loading: false };
+      if (product_url) urls.product_url = product_url;
+      if (user_guide) urls.user_guide = user_guide;
+      if (support) urls.support = support;
       setDeviceUrls((prev) => ({
         ...prev,
-        [ip]: {
-          product_url: product_url || undefined,
-          user_guide: user_guide || undefined,
-          support: support || undefined,
-          loading: false,
-        },
+        [ip]: urls,
       }));
     } catch (e) {
       setDeviceUrls((prev) => ({
@@ -228,7 +218,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   };
 
   const filteredComms = createMemo(() => {
-    const ip = selectedIp();
+    const ip = selectedDevice()?.ip_address;
     if (!ip) return [];
     return log.entries.filter((e) => e.sourceIp === ip).slice(-120).reverse();
   });
@@ -259,7 +249,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       </div>
 
       <div class="mb-3 flex flex-wrap gap-1.5">
-        <For each={["all", "online", "offline", "manual", "warnings"] as DeviceFilter[]}>
+        <For each={["all", "online", "offline", "manual"] as DeviceFilter[]}>
           {(f) => (
             <button
               type="button"
@@ -287,7 +277,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
             </Show>
             <For each={connectedDevices()}>
               {(device) => {
-                const selected = () => selectedIp() === device.ip_address;
+                const selected = () => selectedProductId() === device.product_id;
                 return (
                   <div
                     class="rounded-md border bg-obsidian p-2 transition-colors"
@@ -301,16 +291,24 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         <div class="flex items-center gap-2">
                           <span class="h-1.5 w-1.5 rounded-full bg-teal" />
                           <span class="truncate text-sm text-primary">{device.short_name || "Unknown Device"}</span>
-                          <span class="rounded bg-teal/10 px-1.5 py-0.5 text-[10px] font-mono text-teal">{device.port_addresses.length}p</span>
+                          <span class="rounded bg-teal/10 px-1.5 py-0.5 text-[10px] font-mono text-teal">{device.ports.length}p</span>
                         </div>
                         <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted font-mono">
                           <span>{device.ip_address}</span>
                           <span>FW {hex(device.firmware_version, 4)}</span>
-                          <Show when={device.bind_index !== undefined}><span>Bind {device.bind_index}</span></Show>
                         </div>
                       </button>
                       <div class="flex items-center gap-1">
-                        <button type="button" onClick={() => setIpProgTarget(device.ip_address)} class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-teal">IP</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIpProgTarget(device.ip_address);
+                            setIpProgTransport(device.transport_addr ?? null);
+                          }}
+                          class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-teal"
+                        >
+                          IP
+                        </button>
                         <button type="button" onClick={() => fetchDeviceUrls(device)} class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-primary">URLs</button>
                       </div>
                     </div>
@@ -327,8 +325,8 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                 <div
                   class="rounded-md border border-edge bg-obsidian/80 p-2 transition-colors"
                   classList={{
-                    "border-teal/30 ring-1 ring-teal/40": selectedIp() === device.ip_address,
-                    "hover:border-edge-active": selectedIp() !== device.ip_address,
+                    "border-teal/30 ring-1 ring-teal/40": selectedProductId() === device.product_id,
+                    "hover:border-edge-active": selectedProductId() !== device.product_id,
                   }}
                 >
                   <div class="flex items-center justify-between gap-2">
@@ -398,9 +396,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                     <span class="text-muted">Firmware</span><span class="font-mono text-secondary">{hex(device().firmware_version, 4)}</span>
                     <span class="text-muted">OEM / ESTA</span><span class="font-mono text-secondary">{hex(device().oem_code, 4)} / {hex(device().esta_man, 4)}</span>
                     <span class="text-muted">Node Report</span><span class="text-secondary truncate" title={device().node_report || "Not reported"}>{device().node_report || "Not reported"}</span>
-                    <span class="text-muted">Bind</span><span class="font-mono text-secondary">{device().bind_ip || "-"} · {device().bind_index ?? "-"}</span>
-                    <span class="text-muted">Port Addresses</span>
-                    <span class="font-mono text-secondary text-[11px]">{device().port_addresses.length ? device().port_addresses.map(formatPortAddress).join(", ") : "None"}</span>
+                    <span class="text-muted">Bind IP</span><span class="font-mono text-secondary">{device().bind_ip || "-"}</span>
+                    <span class="text-muted">Output universes</span>
+                    <span class="font-mono text-secondary text-[11px]">{device().ports.length ? device().ports.map((p) => formatPortAddress(p.output_universe)).join(", ") : "None"}</span>
                   </div>
 
                   <div class="mt-3 border-t border-edge pt-3">
@@ -429,22 +427,33 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
                 <Show when={detailTab() === "ports"}>
                   <div class="space-y-2 text-xs">
-                    <div class="grid grid-cols-2 gap-2">
-                      <div class="rounded border border-edge bg-surface p-2">
-                        <div class="mb-1 text-[10px] uppercase tracking-wide text-muted">Outputs</div>
-                        <div class="font-mono text-secondary text-[11px]">{device().port_addresses.length ? device().port_addresses.map(formatPortAddress).join(", ") : "None"}</div>
-                      </div>
-                      <div class="rounded border border-edge bg-surface p-2">
-                        <div class="mb-1 text-[10px] uppercase tracking-wide text-muted">Inputs</div>
-                        <div class="font-mono text-secondary text-[11px]">{(device().input_port_addresses ?? []).length ? (device().input_port_addresses ?? []).map(formatPortAddress).join(", ") : "None"}</div>
-                      </div>
+                    <div class="max-h-[14rem] overflow-auto rounded border border-edge">
+                      <table class="w-full text-left text-[11px]">
+                        <thead class="sticky top-0 border-b border-edge bg-surface text-[10px] uppercase tracking-wide text-muted">
+                          <tr>
+                            <th class="px-2 py-1">Bind</th>
+                            <th class="px-2 py-1">Label</th>
+                            <th class="px-2 py-1">Out</th>
+                            <th class="px-2 py-1">In</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <For each={device().ports}>
+                            {(p) => (
+                              <tr class="border-b border-edge/40">
+                                <td class="px-2 py-1 font-mono text-secondary">{p.bind_index}</td>
+                                <td class="px-2 py-1 text-primary">{p.label}</td>
+                                <td class="px-2 py-1 font-mono text-secondary">{formatPortAddress(p.output_universe)}</td>
+                                <td class="px-2 py-1 font-mono text-secondary">{p.input_universe != null ? formatPortAddress(p.input_universe) : "—"}</td>
+                              </tr>
+                            )}
+                          </For>
+                        </tbody>
+                      </table>
                     </div>
-                    <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                      <span class="text-muted">Num ports</span><span class="font-mono text-secondary">{device().num_ports ?? device().port_addresses.length}</span>
-                      <span class="text-muted">SwOut / SwIn</span><span class="font-mono text-secondary text-[11px]">{(device().sw_out ?? []).map((x) => hex(x)).join(" ") || "-"} / {(device().sw_in ?? []).map((x) => hex(x)).join(" ") || "-"}</span>
-                      <span class="text-muted">PortTypes</span><span class="font-mono text-secondary text-[11px]">{(device().port_types ?? []).map((x) => hex(x)).join(" ") || "Not reported"}</span>
-                      <span class="text-muted">GoodOut / GoodIn</span><span class="font-mono text-secondary text-[11px]">{(device().good_output ?? []).map((x) => hex(x)).join(" ") || "-"} / {(device().good_input ?? []).map((x) => hex(x)).join(" ") || "-"}</span>
-                    </div>
+                    <Show when={device().ports.length === 0}>
+                      <div class="text-[11px] text-muted">No ports reported (e.g. manual entry or controller with no DMX outputs).</div>
+                    </Show>
                   </div>
                 </Show>
 
@@ -452,12 +461,10 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                   <div class="space-y-2 text-xs">
                     <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
                       <span class="text-muted">Online</span><span class="text-secondary">{device().online === false ? "No" : "Yes"}</span>
-                      <span class="text-muted">Status1/2/3</span><span class="font-mono text-secondary">{hex(device().status1 ?? 0)} / {hex(device().status2 ?? 0)} / {hex(device().status3 ?? 0)}</span>
-                      <span class="text-muted">sACN priority</span><span class="font-mono text-secondary">{device().acn_priority ?? "Not reported"}</span>
-                      <span class="text-muted">Refresh rate</span><span class="font-mono text-secondary">{device().refresh_rate ?? "Not reported"}</span>
+                      <span class="text-muted">Ports</span><span class="font-mono text-secondary">{device().ports.length}</span>
                     </div>
                     <div class="rounded border border-edge bg-surface p-2 text-[11px] text-muted">
-                      Diagnostics are protocol hints from ArtPollReply bitfields and may vary by manufacturer.
+                      Per-bind status flags are available in the flat `get_devices` API; the product view focuses on merged ports.
                     </div>
                   </div>
                 </Show>
@@ -480,17 +487,11 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
                 <Show when={detailTab() === "protocol"}>
                   <div class="max-h-[18rem] overflow-auto rounded border border-edge bg-surface p-2 text-[11px] font-mono text-secondary">
+                    <div>product_id: {device().product_id}</div>
                     <div>ip_address: {device().ip_address}</div>
-                    <div>bind_ip: {device().bind_ip ?? "Not reported"}</div>
-                    <div>bind_index: {device().bind_index ?? "Not reported"}</div>
-                    <div>port: {device().port ?? "Not reported"}</div>
-                    <div>net_switch/sub_switch: {device().net_switch ?? "-"}/{device().sub_switch ?? "-"}</div>
-                    <div>style: {device().style ?? "Not reported"}</div>
-                    <div>ubea_version: {device().ubea_version ?? "Not reported"}</div>
-                    <div>sw_macro/sw_remote: {device().sw_macro ?? "-"}/{device().sw_remote ?? "-"}</div>
-                    <div>def_resp: {device().def_resp ?? "Not reported"}</div>
-                    <div>user: {device().user ?? "Not reported"}</div>
-                    <div>good_output_b: {(device().good_output_b ?? []).map((x) => hex(x)).join(" ") || "Not reported"}</div>
+                    <div>bind_ip: {device().bind_ip}</div>
+                    <div>mac_address: {device().mac_address || "—"}</div>
+                    <div>ports_merged: {device().ports.length}</div>
                     <div>node_report: {device().node_report || "Not reported"}</div>
                   </div>
                 </Show>
@@ -502,12 +503,15 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
       <IpProgDialog
         isOpen={() => ipProgTarget() !== null}
-        onClose={() => setIpProgTarget(null)}
+        onClose={() => {
+          setIpProgTarget(null);
+          setIpProgTransport(null);
+        }}
         targetIp={ipProgTarget() ?? ""}
+        transportAddr={ipProgTransport()}
         deviceName={
-          ipProgTarget()
-            ? mergedDevices().find((d) => d.ip_address === ipProgTarget())?.short_name
-            : undefined
+          mergedProducts().find((d) => d.ip_address === (ipProgTarget() ?? ""))
+            ?.short_name ?? ""
         }
       />
 

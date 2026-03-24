@@ -2,7 +2,7 @@
 //!
 //! IP configuration packets. ArtIpProg is sent unicast to reprogram a node's
 //! IP/mask/gateway. ArtIpProgReply is the node's reply confirming settings.
-//! Command byte bit 7 = read-only query (no programming).
+//! Command byte bit 7 = enable programming.
 
 use zerocopy::{FromBytes, FromZeroes};
 
@@ -14,8 +14,8 @@ use super::{ArtNetPacket, ParseError, ART_NET_HEADER};
 /// are big-endian (network byte order).
 ///
 /// Command byte: bit 7 = Enable Programming (0 = read-only query), bit 6 = Enable DHCP,
-/// bit 5 = Program Gateway, bit 4 = Reset, bit 3 = Program IP, bit 2 = Program Subnet Mask,
-/// bit 1 = Program Port.
+/// bit 4 = Program Gateway, bit 3 = Reset to defaults, bit 2 = Program IP,
+/// bit 1 = Program Subnet Mask, bit 0 = Program Port.
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes)]
 pub struct ArtIpProgPacket {
@@ -29,7 +29,7 @@ pub struct ArtIpProgPacket {
     pub proto_ver_lo: u8,
     /// Filler (2 bytes), reserved.
     pub filler1: [u8; 2],
-    /// Command byte. Bit 7 = read-only query.
+    /// Command byte. Bit 7 = enable programming.
     pub command: u8,
     /// Filler (1 byte), reserved.
     pub filler2: u8,
@@ -166,18 +166,18 @@ impl ArtIpProgReplyPacket {
 /// Per Art-Net 4 spec:
 /// - Bit 7 = Enable Programming (0 = read-only query)
 /// - Bit 6 = Enable DHCP
-/// - Bit 5 = Program Gateway
-/// - Bit 4 = Reset
-/// - Bit 3 = Program IP
-/// - Bit 2 = Program Subnet Mask
-/// - Bit 1 = Program Port
+/// - Bit 4 = Program Gateway
+/// - Bit 3 = Reset
+/// - Bit 2 = Program IP
+/// - Bit 1 = Program Subnet Mask
+/// - Bit 0 = Program Port
 pub const IP_PROG_BIT_ENABLE: u8 = 0x80;
 pub const IP_PROG_BIT_DHCP: u8 = 0x40;
-pub const IP_PROG_BIT_GATEWAY: u8 = 0x20;
-pub const IP_PROG_BIT_RESET: u8 = 0x10;
-pub const IP_PROG_BIT_IP: u8 = 0x08;
-pub const IP_PROG_BIT_SUBNET: u8 = 0x04;
-pub const IP_PROG_BIT_PORT: u8 = 0x02;
+pub const IP_PROG_BIT_GATEWAY: u8 = 0x10;
+pub const IP_PROG_BIT_RESET: u8 = 0x08;
+pub const IP_PROG_BIT_IP: u8 = 0x04;
+pub const IP_PROG_BIT_SUBNET: u8 = 0x02;
+pub const IP_PROG_BIT_PORT: u8 = 0x01;
 
 /// Configuration for building an ArtIpProg packet.
 ///
@@ -209,7 +209,7 @@ pub struct IpProgConfig {
     pub gateway: Option<std::net::Ipv4Addr>,
 }
 
-/// Builds a 36-byte ArtIpProg packet (OpCode 0xF800) per Art-Net 4 spec.
+/// Builds a 34-byte ArtIpProg packet (OpCode 0xF800) per Art-Net 4 spec.
 ///
 /// For read-only query: use `IpProgConfig::default()` or set `enable_programming: false`.
 /// The device will reply with ArtIpProgReply containing its current configuration.
@@ -231,8 +231,8 @@ pub struct IpProgConfig {
 /// | 24     | 2    | ProgPort  | BE            |
 /// | 26     | 4    | ProgGw    | BE            |
 /// | 30     | 4    | Spare     | 0             |
-pub fn build_art_ip_prog(config: &IpProgConfig) -> [u8; 36] {
-    let mut pkt = [0u8; 36];
+pub fn build_art_ip_prog(config: &IpProgConfig) -> [u8; 34] {
+    let mut pkt = [0u8; 34];
 
     pkt[0..8].copy_from_slice(ART_NET_HEADER);
     pkt[8..10].copy_from_slice(&0xF800u16.to_le_bytes());
@@ -495,11 +495,63 @@ mod tests {
             ..Default::default()
         };
         let pkt = build_art_ip_prog(&config);
-        assert_eq!(pkt[14], 0x80 | 0x08 | 0x04 | 0x20 | 0x02); // enable + ip + subnet + gw + port
+        assert_eq!(pkt[14], 0x80 | 0x04 | 0x02 | 0x10 | 0x01); // enable + ip + subnet + gw + port
         assert_eq!(&pkt[16..20], &[192, 168, 1, 100]);
         assert_eq!(&pkt[20..24], &[255, 255, 255, 0]);
         assert_eq!(&pkt[24..26], &[0x19, 0x36]); // 6454 BE
         assert_eq!(&pkt[26..30], &[192, 168, 1, 1]);
+    }
+
+    #[test]
+    fn test_build_art_ip_prog_program_ip_only_sets_spec_bit_2() {
+        let config = IpProgConfig {
+            enable_programming: true,
+            program_ip: true,
+            ip: Some(std::net::Ipv4Addr::new(192, 168, 1, 111)),
+            ..Default::default()
+        };
+        let pkt = build_art_ip_prog(&config);
+        assert_eq!(pkt[14], 0x84);
+        assert_eq!(&pkt[16..20], &[192, 168, 1, 111]);
+    }
+
+    #[test]
+    fn test_build_art_ip_prog_program_subnet_only_sets_spec_bit_1() {
+        let config = IpProgConfig {
+            enable_programming: true,
+            program_subnet: true,
+            subnet_mask: Some(std::net::Ipv4Addr::new(255, 0, 0, 0)),
+            ..Default::default()
+        };
+        let pkt = build_art_ip_prog(&config);
+        assert_eq!(pkt[14], 0x82);
+        assert_eq!(&pkt[20..24], &[255, 0, 0, 0]);
+    }
+
+    #[test]
+    fn test_build_art_ip_prog_program_gateway_only_sets_spec_bit_4() {
+        let config = IpProgConfig {
+            enable_programming: true,
+            program_gateway: true,
+            gateway: Some(std::net::Ipv4Addr::new(192, 168, 1, 1)),
+            ..Default::default()
+        };
+        let pkt = build_art_ip_prog(&config);
+        assert_eq!(pkt[14], 0x90);
+        assert_eq!(&pkt[26..30], &[192, 168, 1, 1]);
+    }
+
+    #[test]
+    fn test_build_art_ip_prog_program_port_only_sets_spec_bit_0() {
+        let config = IpProgConfig {
+            enable_programming: true,
+            program_port: true,
+            port: Some(6454),
+            ..Default::default()
+        };
+        let pkt = build_art_ip_prog(&config);
+        assert_eq!(pkt[14], 0x81);
+        assert_eq!(&pkt[24..26], &[0x19, 0x36]);
     }
 
     #[test]

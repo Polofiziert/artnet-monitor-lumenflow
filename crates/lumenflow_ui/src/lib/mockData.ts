@@ -1,4 +1,4 @@
-import type { DeviceInfoDto } from "../components/DeviceList";
+import type { ArtNetProductDto, ProductPortDto } from "../components/DeviceList";
 
 export interface MockUniverse {
   id: number;
@@ -58,6 +58,40 @@ export const GRANDMA3_BACKUP_IP = "192.168.1.20";
 function assignPattern(universeIndex: number): PatternFn {
   const key = PATTERN_KEYS[universeIndex % PATTERN_KEYS.length]!;
   return patterns[key]!;
+}
+
+function mockProduct(opts: {
+  ip: string;
+  mac: string;
+  shortName: string;
+  longName: string;
+  universes: number[];
+  fw: number;
+  esta: number;
+  oem: number;
+}): ArtNetProductDto {
+  const product_id = `${opts.ip}|${opts.mac.replace(/:/g, "")}`;
+  const ports: ProductPortDto[] = opts.universes.map((u, i) => ({
+    bind_index: 1,
+    slot: i,
+    output_universe: u,
+    input_universe: null,
+    label: `Port ${i + 1}`,
+  }));
+  return {
+    product_id,
+    bind_ip: opts.ip,
+    ip_address: opts.ip,
+    mac_address: opts.mac,
+    short_name: opts.shortName,
+    long_name: opts.longName,
+    esta_man: opts.esta,
+    oem_code: opts.oem,
+    firmware_version: opts.fw,
+    node_report: "Mock",
+    ports,
+    online: true,
+  };
 }
 
 export function createMockUniverses(count: number): MockUniverse[] {
@@ -177,73 +211,69 @@ export function tickMockNetworkStats(stats: NetworkStats, time: number): void {
   }
 }
 
-export function createMockDevices(): DeviceInfoDto[] {
+const EIGHT_UNIS = [0, 1, 2, 3, 4, 5, 6, 7];
+
+export function createMockProducts(): ArtNetProductDto[] {
   return [
-    {
-      ip_address: GRANDMA3_MASTER_IP,
-      mac_address: "00:1A:2B:3C:4D:5E",
-      short_name: "GrandMA 3 #1",
-      long_name: "MA Lighting grandMA 3 - Master (FOH)",
-      firmware_version: 0x0312,
-      esta_man: 0x0043,
-      oem_code: 0x0431,
-      port_addresses: [],
-      online: true,
-    },
-    {
-      ip_address: GRANDMA3_BACKUP_IP,
-      mac_address: "AA:BB:CC:DD:EE:01",
-      short_name: "GrandMA 3 #2",
-      long_name: "MA Lighting grandMA 3 - Backup",
-      firmware_version: 0x0312,
-      esta_man: 0x0043,
-      oem_code: 0x0431,
-      port_addresses: [],
-      online: true,
-    },
-    {
-      ip_address: "192.168.1.101",
-      mac_address: "00:04:20:01:00:01",
-      short_name: "Swisson XND-8 #1",
-      long_name: "Swisson XND-8 Artnet Node - Stage Left",
-      firmware_version: 0x0201,
-      esta_man: 0x0420,
-      oem_code: 0x0420,
-      port_addresses: [0, 1, 2, 3, 4, 5, 6, 7],
-      online: true,
-    },
-    {
-      ip_address: "192.168.1.102",
-      mac_address: "00:04:20:01:00:02",
-      short_name: "Swisson XND-8 #2",
-      long_name: "Swisson XND-8 Artnet Node - Stage Right",
-      firmware_version: 0x0201,
-      esta_man: 0x0420,
-      oem_code: 0x0420,
-      port_addresses: [0, 1, 2, 3, 4, 5, 6, 7],
-      online: true,
-    },
-    {
-      ip_address: "192.168.1.103",
-      mac_address: "00:04:20:01:00:03",
-      short_name: "Swisson XND-8 #3",
-      long_name: "Swisson XND-8 Artnet Node - Upstage",
-      firmware_version: 0x0201,
-      esta_man: 0x0420,
-      oem_code: 0x0420,
-      port_addresses: [0, 1, 2, 3, 4, 5, 6, 7],
-      online: true,
-    },
-    {
-      ip_address: "192.168.1.104",
-      mac_address: "00:04:20:01:00:04",
-      short_name: "Swisson XND-8 #4",
-      long_name: "Swisson XND-8 Artnet Node - FOH",
-      firmware_version: 0x0201,
-      esta_man: 0x0420,
-      oem_code: 0x0420,
-      port_addresses: [0, 1, 2, 3, 4, 5, 6, 7],
-      online: true,
-    },
+    mockProduct({
+      ip: GRANDMA3_MASTER_IP,
+      mac: "00:1A:2B:3C:4D:5E",
+      shortName: "GrandMA 3 #1",
+      longName: "MA Lighting grandMA 3 - Master (FOH)",
+      universes: [],
+      fw: 0x0312,
+      esta: 0x0043,
+      oem: 0x0431,
+    }),
+    mockProduct({
+      ip: GRANDMA3_BACKUP_IP,
+      mac: "AA:BB:CC:DD:EE:01",
+      shortName: "GrandMA 3 #2",
+      longName: "MA Lighting grandMA 3 - Backup",
+      universes: [],
+      fw: 0x0312,
+      esta: 0x0043,
+      oem: 0x0431,
+    }),
+    mockProduct({
+      ip: "192.168.1.101",
+      mac: "00:04:20:01:00:01",
+      shortName: "Swisson XND-8 #1",
+      longName: "Swisson XND-8 Artnet Node - Stage Left",
+      universes: EIGHT_UNIS,
+      fw: 0x0201,
+      esta: 0x0420,
+      oem: 0x0420,
+    }),
+    mockProduct({
+      ip: "192.168.1.102",
+      mac: "00:04:20:01:00:02",
+      shortName: "Swisson XND-8 #2",
+      longName: "Swisson XND-8 Artnet Node - Stage Right",
+      universes: EIGHT_UNIS,
+      fw: 0x0201,
+      esta: 0x0420,
+      oem: 0x0420,
+    }),
+    mockProduct({
+      ip: "192.168.1.103",
+      mac: "00:04:20:01:00:03",
+      shortName: "Swisson XND-8 #3",
+      longName: "Swisson XND-8 Artnet Node - Upstage",
+      universes: EIGHT_UNIS,
+      fw: 0x0201,
+      esta: 0x0420,
+      oem: 0x0420,
+    }),
+    mockProduct({
+      ip: "192.168.1.104",
+      mac: "00:04:20:01:00:04",
+      shortName: "Swisson XND-8 #4",
+      longName: "Swisson XND-8 Artnet Node - FOH",
+      universes: EIGHT_UNIS,
+      fw: 0x0201,
+      esta: 0x0420,
+      oem: 0x0420,
+    }),
   ];
 }

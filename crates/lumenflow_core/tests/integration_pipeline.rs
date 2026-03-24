@@ -253,6 +253,7 @@ fn pipeline_poll_reply_feeds_device_registry() {
                 port_addresses: reply.output_port_addresses(),
                 input_port_addresses: reply.input_port_addresses(),
                 last_seen: Instant::now(),
+                last_reply_source: None,
             };
             registry.upsert(device);
         }
@@ -315,6 +316,7 @@ fn pipeline_multiple_devices_tracked_separately() {
                 port_addresses: reply.output_port_addresses(),
                 input_port_addresses: reply.input_port_addresses(),
                 last_seen: Instant::now(),
+                last_reply_source: None,
             });
         }
     }

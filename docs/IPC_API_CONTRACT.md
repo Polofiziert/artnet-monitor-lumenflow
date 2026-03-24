@@ -21,8 +21,8 @@ This document defines the complete contract between the Tauri/Rust backend and t
 │  • diag-entry event ← real-time diagnostics                             │
 │  • timecode event ← SMPTE/EBU timecode                                   │
 │  • time-sync event ← real-time clock sync                               │
-│  • Commands: get_available_universes, get_devices, get_diag_entries,     │
-│    send_ip_prog, request_device_url                                      │
+│  • Commands: get_available_universes, get_devices, get_artnet_products,  │
+│    get_diag_entries, send_ip_prog, request_device_url                  │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │ IPC │
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -48,10 +48,11 @@ This document defines the complete contract between the Tauri/Rust backend and t
 | ---------------------------- | --------- | -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `set_active_universes`       | FE → BE   | `{ ids: number[] }`                          | `void`                  | Register viewport-visible universe IDs. Call when sidebar selection, visible tabs, or scroll changes.                            |
 | `get_available_universes`    | FE → BE   | —                                            | `number[]`              | Sorted list of active (initialized) 15-bit port-addresses. Poll every 1–2s when not in mock mode.                                |
-| `get_devices`                | FE → BE   | —                                            | `DeviceInfoDto[]`       | Bootstrap/fallback snapshot of discovered Art-Net nodes. Use with `devices-updated` event for push-first updates.               |
+| `get_devices`                | FE → BE   | —                                            | `DeviceInfoDto[]`       | Flat per-bind snapshot (debug/advanced). Prefer `get_artnet_products` for UI.                                                    |
+| `get_artnet_products`        | FE → BE   | —                                            | `ArtNetProductDto[]`    | One entry per physical node (bind IP + MAC); ports flattened across BindIndex. Primary for Devices and Routing.                  |
 | `get_diag_entries`           | FE → BE   | —                                            | `DiagEntryDto[]`        | Snapshot of diagnostic log. Used for initial load; `diag-entry` event for live updates.                                          |
 | `send_ip_prog`               | FE → BE   | `IpProgParams`                               | `IpProgReplyDto`        | Send ArtIpProg unicast to target device. Read-only or programming mode.                                                          |
-| `request_device_url`         | FE → BE   | `{ target_ip, esta_man, oem, request_type }` | `string`                | Fetch product/user guide/support URL via ArtDataRequest. Use `oem` (not `oem_code`) as key; value from `DeviceInfoDto.oem_code`. |
+| `request_device_url`         | FE → BE   | `{ target_ip, esta_man, oem, request_type }` | `string`                | Fetch product/user guide/support URL via ArtDataRequest. Use `oem` (not `oem_code`) as key; value from `ArtNetProductDto.oem_code` (or `DeviceInfoDto` for flat `get_devices`). |
 | `get_network_interfaces_cmd` | FE → BE   | —                                            | `NetworkInterfaceDto[]` | List IPv4 network interfaces (name, ip, subnet, broadcast). Used for NIC selection in Settings.                                  |
 | `get_network_settings_cmd`   | FE → BE   | —                                            | `NetworkSettingsDto`    | Persisted network config (interface mode, CIDR, discovery targets).                                                              |
 | `set_network_settings_cmd`   | FE → BE   | `{ settings: NetworkSettingsDto }`           | `void`                  | Persist settings and restart UDP listener/discovery. Apply on change; no separate Apply button.                                  |
@@ -66,7 +67,7 @@ This document defines the complete contract between the Tauri/Rust backend and t
 | `universe-metrics` | BE → FE   | `number[]` (binary) | 60Hz       | Sync status + per-universe metrics. See §4.2.        |
 | `route-info`       | BE → FE   | `number[]` (binary) | ~10Hz      | Per-universe source IPs, pkt/s, lastSeen. See §4.3.  |
 | `jitter-samples`   | BE → FE   | JSON `number[]`     | ~10Hz      | Inter-packet arrival intervals in ms. See §4.4.      |
-| `devices-updated`  | BE → FE   | JSON `DevicesUpdatedDto` | On change (~10Hz max emit block) | Push snapshot of devices when registry version changes. |
+| `devices-updated`  | BE → FE   | JSON `DevicesUpdatedDto` | On change (~10Hz max emit block) | Push snapshot of **products** (`ArtNetProductDto[]`) when registry version changes. |
 | `diag-entry`       | BE → FE   | JSON                | On receipt | Single diagnostic message from ArtDiagData.          |
 | `timecode`         | BE → FE   | JSON                | On receipt | SMPTE/EBU timecode from ArtTimeCode.                 |
 | `time-sync`        | BE → FE   | JSON                | On receipt | Real-time clock sync from ArtTimeSync.               |
@@ -207,13 +208,40 @@ interface DeviceInfoDto {
 }
 ```
 
-### 5.1a DevicesUpdatedDto
+### 5.1a ProductPortDto & ArtNetProductDto
+
+```typescript
+interface ProductPortDto {
+  bind_index: number;
+  slot: number;
+  output_universe: number; // 15-bit port-address
+  input_universe: number | null;
+  label: string;
+}
+
+interface ArtNetProductDto {
+  product_id: string; // stable "bindIp|MACHEX" (no colons in MAC segment)
+  bind_ip: string;
+  ip_address: string;
+  mac_address: string;
+  short_name: string;
+  long_name: string;
+  esta_man: number;
+  oem_code: number;
+  firmware_version: number;
+  node_report: string;
+  ports: ProductPortDto[];
+  online: boolean;
+}
+```
+
+### 5.1b DevicesUpdatedDto
 
 ```typescript
 interface DevicesUpdatedDto {
   version: number; // monotonic device registry version
   timestamp_nanos: number;
-  devices: DeviceInfoDto[];
+  products: ArtNetProductDto[];
 }
 ```
 
@@ -347,7 +375,7 @@ The frontend must support **mock** and **real** modes with a unified interface:
 | DMX channels     | `mockData.tickMockUniverses`  | `dmx-frame` event                        |
 | Universe list    | `createMockUniverses` IDs     | `get_available_universes`                |
 | Universe metrics | N/A (stale/source badges)     | `universe-metrics` event                 |
-| Devices          | `createMockDevices`           | `get_devices`                            |
+| Devices          | `createMockProducts`          | `get_artnet_products` + `devices-updated` |
 | Sync status      | `networkStats.artSyncActive`  | `universe-metrics` sync_active           |
 | Source IPs       | `networkStats.sourceIps`      | **GAP** — backend needs route/source IPs |
 | Routes           | `mockUniverses` → RouteInfo   | **GAP** — backend needs route emission   |
@@ -390,7 +418,7 @@ invoke("set_active_universes", { ids: number[] });
 ### 7.3 Data Flow
 
 - **Universe list:** Poll `get_available_universes` every 1s when not in mock mode. Merge with `dmx-frame` to avoid stale list.
-- **Devices:** Poll `get_devices` every 2s when on Devices view. Consider event-driven when `ArtPollReply` received (future).
+- **Devices:** Poll `get_artnet_products` every 2s when on Devices or Routing view; `devices-updated` pushes merged products when the registry changes.
 - **Diagnostics:** Initial `get_diag_entries` on mount; `diag-entry` for live updates.
 
 ---

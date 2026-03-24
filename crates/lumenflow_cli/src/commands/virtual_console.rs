@@ -79,6 +79,7 @@ pub async fn run(
     target: &str,
     physical: u8,
     sync_target: Option<&str>,
+    periodic_poll_reply: bool,
     verbose: bool,
 ) -> Result<()> {
     let pattern = get_pattern(pattern_name)?;
@@ -118,8 +119,11 @@ pub async fn run(
     let mut tick = tokio::time::interval(period);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-    let mut poll_reply_tick = tokio::time::interval(Duration::from_secs_f64(2.5));
-    poll_reply_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut poll_reply_tick = periodic_poll_reply.then(|| {
+        let mut i = tokio::time::interval(Duration::from_secs_f64(2.5));
+        i.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        i
+    });
 
     let mut dmx_buf = [0u8; CHANNEL_COUNT];
     let mut recv_buf = [0u8; 2048];
@@ -130,8 +134,17 @@ pub async fn run(
         let recv_fut = tokio::time::timeout(period, socket.recv_from(&mut recv_buf));
 
         tokio::select! {
-            // Periodic ArtPollReply to target (for discovery when broadcast doesn't reach us)
-            _ = poll_reply_tick.tick() => {
+            // Optional: periodic ArtPollReply to `--target` (not spec; legacy discovery helper)
+            _ = async {
+                match poll_reply_tick.as_mut() {
+                    Some(t) => {
+                        t.tick().await;
+                    }
+                    None => {
+                        std::future::pending::<()>().await;
+                    }
+                }
+            }, if periodic_poll_reply => {
                 let pkt = build_mock_poll_reply(&poll_reply_config);
                 if let Err(e) = socket.send_to(&pkt, target_addr).await {
                     eprintln!("[WARN] failed to send periodic ArtPollReply: {e}");

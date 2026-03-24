@@ -64,13 +64,18 @@ pub async fn run(
     ip: &str,
     port: u16,
     target: &str,
+    periodic_poll_reply: bool,
     verbose: bool,
 ) -> Result<()> {
     let ip_addr: std::net::Ipv4Addr = ip
         .parse()
         .map_err(|e| anyhow::anyhow!("invalid IP '{}': {}", ip, e))?;
 
-    let target_addr = super::resolve::resolve_target(target, ART_NET_PORT).await?;
+    let target_addr = if periodic_poll_reply {
+        Some(super::resolve::resolve_target(target, ART_NET_PORT).await?)
+    } else {
+        None
+    };
 
     let bind_addr = SocketAddr::from(([0, 0, 0, 0], port));
     let mut socket = ArtNetSocket::bind(bind_addr)
@@ -92,16 +97,27 @@ pub async fn run(
     let mut long_overlay: Option<String> = None;
 
     eprintln!(
-        "Virtual node profile={:?} '{}' @ {} listening on 0.0.0.0:{}, target {}",
-        profile, name, ip_addr, port, target_addr
+        "Virtual node profile={:?} '{}' @ {} listening on 0.0.0.0:{}{}",
+        profile,
+        name,
+        ip_addr,
+        port,
+        if periodic_poll_reply {
+            format!("; periodic ArtPollReply → {target}")
+        } else {
+            String::new()
+        }
     );
     if port == 6454 {
         eprintln!("Note: Port 6454 conflicts with LumenFlow. Use --port 6455 if both run on same machine.");
     }
     eprintln!("Press Ctrl+C to stop.\n");
 
-    let mut poll_reply_tick = tokio::time::interval(Duration::from_secs_f64(2.5));
-    poll_reply_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut poll_reply_tick = periodic_poll_reply.then(|| {
+        let mut i = tokio::time::interval(Duration::from_secs_f64(2.5));
+        i.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        i
+    });
 
     loop {
         let recv_fut = tokio::time::timeout(
@@ -110,14 +126,24 @@ pub async fn run(
         );
 
         tokio::select! {
-            _ = poll_reply_tick.tick() => {
+            _ = async {
+                match poll_reply_tick.as_mut() {
+                    Some(t) => {
+                        t.tick().await;
+                    }
+                    None => {
+                        std::future::pending::<()>().await;
+                    }
+                }
+            }, if periodic_poll_reply => {
+                let Some(ta) = target_addr else { continue };
                 match profile {
                     VirtualNodeProfile::Generic => {
                         let pkt = build_mock_poll_reply(&generic_config);
-                        if let Err(e) = socket.send_to(&pkt, target_addr).await {
+                        if let Err(e) = socket.send_to(&pkt, ta).await {
                             eprintln!("[WARN] failed to send periodic ArtPollReply: {e}");
                         } else if verbose {
-                            eprintln!("[TX ArtPollReply] → {} (periodic)", target_addr);
+                            eprintln!("[TX ArtPollReply] → {} (periodic)", ta);
                         }
                     }
                     VirtualNodeProfile::SwissonXnd8 => {
@@ -129,13 +155,13 @@ pub async fn run(
                                 universe_for_bind(bind),
                                 dmx_recent.contains_key(&universe_for_bind(bind)),
                             );
-                            if let Err(e) = socket.send_to(&pkt, target_addr).await {
+                            if let Err(e) = socket.send_to(&pkt, ta).await {
                                 eprintln!("[WARN] failed to send periodic ArtPollReply: {e}");
                                 break;
                             }
                         }
                         if verbose {
-                            eprintln!("[TX ArtPollReply ×8] → {} (periodic)", target_addr);
+                            eprintln!("[TX ArtPollReply ×8] → {} (periodic)", ta);
                         }
                     }
                 }

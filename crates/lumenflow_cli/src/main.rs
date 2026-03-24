@@ -2,7 +2,7 @@
 
 mod commands;
 
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
@@ -102,6 +102,10 @@ enum Commands {
         #[arg(long)]
         sync_target: Option<String>,
 
+        /// Legacy: send ArtPollReply to `--target` every ~2.5s without ArtPoll (default: off; real nodes only reply to ArtPoll)
+        #[arg(long, action = ArgAction::SetTrue)]
+        periodic_poll_reply: bool,
+
         /// Log each packet sent/received
         #[arg(long)]
         verbose: bool,
@@ -132,9 +136,13 @@ enum Commands {
         #[arg(long, default_value_t = 6454)]
         port: u16,
 
-        /// Target for periodic ArtPollReply (LumenFlow address for discovery)
+        /// With `--periodic-poll-reply`: destination for unsolicited PollReply (e.g. host.docker.internal)
         #[arg(short, long, default_value = "127.0.0.1")]
         target: String,
+
+        /// Legacy: send ArtPollReply to `--target` every ~2.5s without ArtPoll (default: off; real nodes only reply to ArtPoll)
+        #[arg(long, action = ArgAction::SetTrue)]
+        periodic_poll_reply: bool,
 
         /// Log each packet received
         #[arg(long)]
@@ -167,6 +175,7 @@ async fn main() -> anyhow::Result<()> {
             physical,
             bind,
             sync_target,
+            periodic_poll_reply,
             verbose,
         } => commands::virtual_console::run(
             &name,
@@ -178,6 +187,7 @@ async fn main() -> anyhow::Result<()> {
             &target,
             physical,
             sync_target.as_deref(),
+            periodic_poll_reply,
             verbose,
         )
         .await,
@@ -190,10 +200,20 @@ async fn main() -> anyhow::Result<()> {
             ip,
             port,
             target,
+            periodic_poll_reply,
             verbose,
         } => {
             let prof = commands::virtual_node::VirtualNodeProfile::parse(&profile)?;
-            commands::virtual_node::run(prof, &name, &ip, port, &target, verbose).await
+            commands::virtual_node::run(
+                prof,
+                &name,
+                &ip,
+                port,
+                &target,
+                periodic_poll_reply,
+                verbose,
+            )
+            .await
         }
     }
 }

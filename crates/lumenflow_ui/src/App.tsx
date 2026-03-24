@@ -26,7 +26,7 @@ import { globalHistory } from "./lib/channelHistory";
 import {
   createMockUniverses,
   tickMockUniverses,
-  createMockDevices,
+  createMockProducts,
   createMockNetworkStats,
   createEmptyNetworkStats,
   tickMockNetworkStats,
@@ -43,7 +43,7 @@ import { useNetworkStats } from "./hooks/useNetworkStats";
 import { useDevices } from "./hooks/useDevices";
 import { useAppMenu } from "./hooks/useAppMenu";
 import { useTheme } from "./hooks/useTheme";
-import type { DeviceInfoDto } from "./components/DeviceList";
+import type { ArtNetProductDto } from "./components/DeviceList";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-shell";
 import HelpPanel from "./components/HelpPanel";
@@ -97,7 +97,7 @@ const App: Component = () => {
     } catch {}
   });
 
-  // D2: Manual devices (persisted); merged with get_devices in DeviceList
+  // D2: Manual devices (persisted); merged with get_artnet_products in DeviceList
   const MANUAL_DEVICES_KEY = "lumenflow_manual_devices";
   function loadManualDevices(): { ip: string; name?: string }[] {
     try {
@@ -168,7 +168,7 @@ const App: Component = () => {
     staleMs: 5000,
   });
   const [routes, setRoutes] = createSignal<RouteInfo[]>([]);
-  const [mockDevices, setMockDevices] = createSignal<DeviceInfoDto[]>([]);
+  const [mockProducts, setMockProducts] = createSignal<ArtNetProductDto[]>([]);
   const [packetRate, setPacketRate] = createSignal(0);
   const chartStats = useNetworkStats({
     isMockMode,
@@ -235,7 +235,7 @@ const App: Component = () => {
 
   function startMock() {
     mockUniverses = createMockUniverses(8);
-    setMockDevices(createMockDevices());
+    setMockProducts(createMockProducts());
     mockNetStats = createMockNetworkStats();
     setNetworkStats({ ...mockNetStats });
 
@@ -261,7 +261,7 @@ const App: Component = () => {
     }
     mockUniverses = [];
     mockTime = 0;
-    setMockDevices([]);
+    setMockProducts([]);
     globalHistory.clear();
     toast("Mock data mode disabled", "info", 2000);
   }
@@ -871,8 +871,8 @@ const App: Component = () => {
                   routes={() =>
                     isMockMode() ? routes() : Array.from(routeInfo)
                   }
-                  devices={() =>
-                    isMockMode() ? mockDevices() : realDevicesStore.devices()
+                  products={() =>
+                    isMockMode() ? mockProducts() : realDevicesStore.products()
                   }
                 />
               </div>
@@ -882,9 +882,9 @@ const App: Component = () => {
             <Show when={activeView() === "devices"}>
               <div class="p-5" data-testid="devices-view">
                 <DeviceList
-                  mockDevices={isMockMode() ? mockDevices() : undefined}
+                  mockProducts={isMockMode() ? mockProducts() : undefined}
                   {...(!isMockMode() && {
-                    devices: realDevicesStore.devices,
+                    products: realDevicesStore.products,
                     manualDevices: manualDevices(),
                     onAddManualDevice: addManualDevice,
                     onRemoveManualDevice: removeManualDevice,

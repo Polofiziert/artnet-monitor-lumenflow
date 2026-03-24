@@ -17,8 +17,9 @@ use network_commands::{
     set_network_settings_cmd,
 };
 use viewport_culler::{
-    get_available_universes, get_devices, get_diag_entries, request_device_url, send_ip_prog,
-    set_active_universes, start_emit_loop, start_network_listeners, AppState,
+    get_artnet_products, get_available_universes, get_devices, get_diag_entries,
+    request_device_url, send_ip_prog, set_active_universes, start_emit_loop, start_network_listeners,
+    AppState,
 };
 
 fn main() {
@@ -45,6 +46,7 @@ fn main() {
             set_active_universes,
             get_available_universes,
             get_devices,
+            get_artnet_products,
             get_diag_entries,
             send_ip_prog,
             request_device_url,

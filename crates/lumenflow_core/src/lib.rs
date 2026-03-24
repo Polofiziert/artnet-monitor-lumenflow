@@ -20,7 +20,7 @@ pub use artnet::{
     ART_COMMAND_DATA_MAX, ART_TRIGGER_OEM_UNIVERSAL, DR_URL_PRODUCT,
 };
 pub use buffer::{epoch_nanos, UniverseBuffer, UniverseStore};
-pub use device::{DeviceInfo, DeviceRegistry, PortDirection, PortInfo};
+pub use device::{ArtNetProduct, DeviceInfo, DeviceRegistry, PortDirection, PortInfo, ProductPort};
 pub use engine::{
     parse_discovery_targets_from_env, spawn_discovery, spawn_discovery_with_config,
     DiscoveryConfig, JitterCollector, SourceTracker, SyncDetector, Staleness, UniverseMetrics,

@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onCleanup } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { DeviceInfoDto } from "../components/DeviceList";
+import type { ArtNetProductDto } from "../components/DeviceList";
 
 /**
  * Shared SWR-ish devices store:
@@ -12,7 +12,7 @@ import type { DeviceInfoDto } from "../components/DeviceList";
 type DevicesUpdatedEvent = {
   version: number;
   timestamp_nanos: number;
-  devices: DeviceInfoDto[];
+  products: ArtNetProductDto[];
 };
 
 interface UseDevicesOptions {
@@ -22,11 +22,11 @@ interface UseDevicesOptions {
   staleMs?: number;
 }
 
-let cacheDevices: DeviceInfoDto[] = [];
+let cacheProducts: ArtNetProductDto[] = [];
 let cacheUpdatedAt = 0;
 
 export function useDevices(options: UseDevicesOptions) {
-  const [devices, setDevices] = createSignal<DeviceInfoDto[]>(cacheDevices);
+  const [products, setProducts] = createSignal<ArtNetProductDto[]>(cacheProducts);
   const [isLoading, setIsLoading] = createSignal(false);
   const [lastUpdatedAt, setLastUpdatedAt] = createSignal(cacheUpdatedAt);
   const [error, setError] = createSignal<string | null>(null);
@@ -34,10 +34,10 @@ export function useDevices(options: UseDevicesOptions) {
   const pollMs = () => options.pollMs ?? 2000;
   const staleMs = () => options.staleMs ?? 5000;
 
-  const applyDevices = (next: DeviceInfoDto[]) => {
-    cacheDevices = next;
+  const applyProducts = (next: ArtNetProductDto[]) => {
+    cacheProducts = next;
     cacheUpdatedAt = Date.now();
-    setDevices(next);
+    setProducts(next);
     setLastUpdatedAt(cacheUpdatedAt);
   };
 
@@ -45,8 +45,8 @@ export function useDevices(options: UseDevicesOptions) {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await invoke<DeviceInfoDto[]>("get_devices");
-      applyDevices(result);
+      const result = await invoke<ArtNetProductDto[]>("get_artnet_products");
+      applyProducts(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -57,8 +57,8 @@ export function useDevices(options: UseDevicesOptions) {
   createEffect(() => {
     if (!options.enabled()) return;
     // D5 SWR: immediately show cache, revalidate if stale.
-    if (cacheDevices.length > 0) {
-      setDevices(cacheDevices);
+    if (cacheProducts.length > 0) {
+      setProducts(cacheProducts);
       setLastUpdatedAt(cacheUpdatedAt);
     }
     if (Date.now() - cacheUpdatedAt > staleMs()) {
@@ -80,8 +80,8 @@ export function useDevices(options: UseDevicesOptions) {
     let unlisten: (() => void) | undefined;
     listen<DevicesUpdatedEvent>("devices-updated", (evt) => {
       const payload = evt.payload;
-      if (!payload || !Array.isArray(payload.devices)) return;
-      applyDevices(payload.devices);
+      if (!payload || !Array.isArray(payload.products)) return;
+      applyProducts(payload.products);
     })
       .then((fn) => {
         unlisten = fn;
@@ -97,7 +97,7 @@ export function useDevices(options: UseDevicesOptions) {
   const isStale = () => Date.now() - lastUpdatedAt() > staleMs();
 
   return {
-    devices,
+    products,
     isLoading,
     isStale,
     lastUpdatedAt,

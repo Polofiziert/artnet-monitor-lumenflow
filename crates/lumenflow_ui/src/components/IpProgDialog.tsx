@@ -14,6 +14,8 @@ interface IpProgDialogProps {
   isOpen: () => boolean;
   onClose: () => void;
   targetIp: string;
+  /** When set (e.g. 127.0.0.1:6457), ArtIpProg is sent here instead of targetIp:6454 (Docker NAT). */
+  transportAddr?: string | null;
   deviceName?: string;
 }
 
@@ -34,6 +36,7 @@ const IpProgDialog: Component<IpProgDialogProps> = (props) => {
       const reply = await invoke<IpProgReplyDto>("send_ip_prog", {
         params: {
           target_ip: props.targetIp,
+          transport: props.transportAddr?.trim() || null,
           new_ip: null,
           subnet_mask: null,
           gateway: null,
@@ -60,6 +63,7 @@ const IpProgDialog: Component<IpProgDialogProps> = (props) => {
       await invoke<IpProgReplyDto>("send_ip_prog", {
         params: {
           target_ip: props.targetIp,
+          transport: props.transportAddr?.trim() || null,
           new_ip: ip() || null,
           subnet_mask: subnetMask() || null,
           gateway: gateway() || null,
@@ -120,9 +124,15 @@ const IpProgDialog: Component<IpProgDialogProps> = (props) => {
 
           <div class="flex flex-col gap-4 p-4">
             <p class="text-[11px] text-muted">
-              Target device:{" "}
+              Advertised IP:{" "}
               <span class="font-mono text-secondary">{props.targetIp}</span>
             </p>
+            <Show when={props.transportAddr?.trim()}>
+              <p class="text-[11px] text-muted">
+                UDP transport:{" "}
+                <span class="font-mono text-teal">{props.transportAddr}</span>
+              </p>
+            </Show>
 
             <div class="flex flex-col gap-2">
               <label class="text-[11px] font-medium uppercase tracking-wide text-muted">

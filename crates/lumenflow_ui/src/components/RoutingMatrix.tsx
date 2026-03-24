@@ -1,6 +1,6 @@
 import type { Component } from "solid-js";
 import { createMemo, For, Show } from "solid-js";
-import type { DeviceInfoDto } from "./DeviceList";
+import type { ArtNetProductDto } from "./DeviceList";
 
 export interface RouteInfo {
   universeId: number;
@@ -12,20 +12,19 @@ export interface RouteInfo {
 interface RoutingMatrixProps {
   universes: () => number[];
   routes?: () => RouteInfo[];
-  devices?: () => DeviceInfoDto[];
-  onDeviceSelect?: (device: DeviceInfoDto) => void;
+  products?: () => ArtNetProductDto[];
+  onDeviceSelect?: (device: ArtNetProductDto) => void;
 }
 
 interface PortColumn {
-  device: DeviceInfoDto;
-  portIndex: number;
+  product: ArtNetProductDto;
   universe: number;
-  isFirstPort: boolean;
+  label: string;
+  /** First column within this product’s port group (visual separator). */
+  isFirstPortOfProduct: boolean;
 }
 
 const DEVICE_HEADER_H = "3rem";
-
-const portLabel = (index: number): string => String.fromCharCode(65 + index);
 
 const formatUniverse = (uni: number): string => {
   const net = (uni >> 8) & 0x7f;
@@ -36,16 +35,16 @@ const formatUniverse = (uni: number): string => {
 
 const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
   const routes = () => props.routes?.() ?? [];
-  const devices = () => props.devices?.() ?? [];
+  const products = () => props.products?.() ?? [];
 
   const deviceByIp = createMemo(() => {
-    const map = new Map<string, DeviceInfoDto>();
-    for (const d of devices()) map.set(d.ip_address, d);
+    const map = new Map<string, ArtNetProductDto>();
+    for (const p of products()) map.set(p.ip_address, p);
     return map;
   });
 
   const transmitters = createMemo(() => {
-    const seen = new Map<string, DeviceInfoDto | undefined>();
+    const seen = new Map<string, ArtNetProductDto | undefined>();
     for (const r of routes()) {
       if (!seen.has(r.sourceIp)) {
         seen.set(r.sourceIp, deviceByIp().get(r.sourceIp));
@@ -57,18 +56,19 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
   });
 
   const receivers = createMemo(() =>
-    devices().filter((d) => d.port_addresses.length > 0)
+    products().filter((p) => p.ports.length > 0)
   );
 
   const portColumns = createMemo((): PortColumn[] => {
     const cols: PortColumn[] = [];
-    for (const dev of receivers()) {
-      for (let i = 0; i < dev.port_addresses.length; i++) {
+    for (const prod of receivers()) {
+      for (let i = 0; i < prod.ports.length; i++) {
+        const port = prod.ports[i]!;
         cols.push({
-          device: dev,
-          portIndex: i,
-          universe: dev.port_addresses[i]!,
-          isFirstPort: i === 0,
+          product: prod,
+          universe: port.output_universe,
+          label: port.label,
+          isFirstPortOfProduct: i === 0,
         });
       }
     }
@@ -172,7 +172,7 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
                 <div
                   class="sticky top-0 z-20 flex items-center justify-center bg-surface px-2 h-12 border-b border-edge cursor-pointer hover:bg-surface-hover transition-colors"
                   style={{
-                    "grid-column": `span ${dev.port_addresses.length}`,
+                    "grid-column": `span ${dev.ports.length}`,
                   }}
                   onClick={() => props.onDeviceSelect?.(dev)}
                   title={`${dev.long_name} (${dev.ip_address})`}
@@ -196,11 +196,11 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
                   class="sticky z-20 flex flex-col items-center justify-center bg-surface px-1 py-1 border-b border-edge"
                   style={{ top: DEVICE_HEADER_H }}
                   classList={{
-                    "border-l border-l-teal/10": col.isFirstPort,
+                    "border-l border-l-teal/10": col.isFirstPortOfProduct,
                   }}
                 >
-                  <span class="text-[9px] font-medium text-secondary">
-                    {portLabel(col.portIndex)}
+                  <span class="text-[9px] font-medium text-secondary truncate max-w-[56px]">
+                    {col.label}
                   </span>
                   <span
                     class="text-[8px] font-mono text-muted"
@@ -254,7 +254,7 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
                         <div
                           class="flex items-center justify-center bg-obsidian min-h-[40px]"
                           classList={{
-                            "border-l border-l-teal/10": col.isFirstPort,
+                            "border-l border-l-teal/10": col.isFirstPortOfProduct,
                           }}
                         >
                           <Show

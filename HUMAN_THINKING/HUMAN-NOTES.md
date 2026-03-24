@@ -22,6 +22,10 @@ Have a nice day :D
 - in the routing tap, when the testscript spawn-virtal-network runs, there is only deices in the top/the rx row, no device in the side/tx colm. There should be the console because it can send artnet. or am i wrong? 
 - in the Dashboard, the network diagnostics. NetworkLoad and Packet Arival time keep displaying data when now network trafic is schown in the dmxGrid and no mocking and now spawn-virtual network script is running
 - the toggle switches in the settings are missaligned when turned on, they are in the on possition when turned of.
+- in the sunlight the programm isnt good to read, we need a light mode with contrast so technitions on a festival in brigth sunlight can use the software easaly
+  - this setting should live in the settings of lumenflow
+  - it should be one of the first settings
+  - it should be changeble from dark to light to system
 
 ### Partialy Implemented
 
@@ -68,10 +72,6 @@ This happens with the spawn-virtual-network script running.
   -> how works the routing matrix  
   -> ...
 - When hovering over dmx channels in the chanelel grid, the pop over with the channel details pushes the channels of the grid to the side, squisching them and by that changing the channel tile under the mouse creating a flickering of the channel details where they come out and dissapear rapidly.
-- in the sunlight the programm isnt good to read, we need a light mode with contrast so technitions on a festival in brigth sunlight can use the software easaly
-  - this setting should live in the settings of lumenflow
-  - it should be one of the first settings
-  - it should be changeble from dark to light to system
 - In the Devices Tab, Changing chageable informations like IP, Long-Name, Port-Name,... Should behave like a form not a modal.
   - with a double click the displayed text should become editable. When pressing enter the value is sent to the Device. For relevant information a warning is shown, espacially for IP and dhcp mode. (everything that can disconnect the device from network and make recovery challenging on site behind stage with time Pressure)
   - the value of the field should allways only display the value of the last ArtPollReply. 
@@ -157,14 +157,11 @@ What when two persons simultaniosly patch a device?
 
 - check for artAddress commands while the user is typing new names for a device or trys to route dmx universes. When the value changes while editing display a warning
 - after the user hits enter, display a loading circle in the field and only show a ok sign when the next artPollReply confirms the change, else send a warning after timeout.
-
-
-
 - Inforamtion when artDMX packets come without sequence or out of order.
 
-
-
 Jitter Graphs per universe where they show jitter between to artDMX packets from that universe, so artDMX sequence=1 and artDMX sequence=2 are messured in that graph.
+
+Jittergraphs per Node ArtPollReply timings
 
 ## Event Reporting
 

@@ -13,7 +13,7 @@ The **desktop app** (`lumenflow_ui` / Tauri) consumes this crate; it adds IPC, U
 | **`artnet`** | Parse incoming UDP payloads into `ArtNetPacket`; build outbound packets (`build_art_*`). The `OpCode` enum lists many spec opcodes; the **parser** implements a **subset** (see §4). Unknown wire values fail with `ParseError::UnknownOpCode` before dispatch. |
 | **`network`** | `ArtNetSocket` (async UDP, large recv buffer, broadcast helpers), `build_art_poll` / `build_art_poll_targeted`, interface enumeration helpers. |
 | **`buffer`** | `UniverseStore`: 32,768 pre-allocated universes (15-bit port-address), per-universe `UniverseBuffer`, `UniverseMetrics`, `SourceTracker`. |
-| **`device`** | `DeviceRegistry` + `DeviceInfo`: thread-safe map keyed by `(IPv4, bind_index)` for **ArtPollReply**-derived discovery metadata. |
+| **`device`** | `DeviceRegistry` + `DeviceInfo`: thread-safe map keyed by `(IPv4, bind_index)` for **ArtPollReply**-derived discovery metadata. **`ArtNetProduct`** + **`ProductPort`**: `DeviceRegistry::aggregate_products()` merges binds with the same **bind IP + MAC** (fallback when `bind_ip` is `0.0.0.0`) into one physical product with a flattened port list for UI. |
 | **`engine`** | Lock-free helpers: `DiscoveryConfig` / `spawn_discovery*` (ArtPoll loop + optional self-ArtPollReply), `SyncDetector`, `JitterCollector`, `DiagBuffer` (import `lumenflow_core::engine::DiagBuffer` — not re-exported at crate root), etc. |
 
 ---

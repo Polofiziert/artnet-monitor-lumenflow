@@ -7,7 +7,7 @@ use dashmap::DashSet;
 use lumenflow_core::artnet::{build_art_data_request, build_art_ip_prog, build_our_poll_reply, ArtNetParser, IpProgConfig, ART_NET_PORT};
 use lumenflow_core::build_art_poll;
 use lumenflow_core::buffer::UniverseStore;
-use lumenflow_core::device::{DeviceInfo, DeviceRegistry};
+use lumenflow_core::device::{ArtNetProduct, DeviceInfo, DeviceRegistry};
 use lumenflow_core::engine::{DiscoveryConfig, DiagBuffer, DiagPriority, JitterCollector, SyncDetector, Staleness};
 use lumenflow_core::network::{derive_cidr_24_from_ip, resolve_interface_for_cidr, ArtNetSocket};
 use lumenflow_core::{epoch_nanos, parse_discovery_targets_from_env, spawn_discovery};
@@ -87,12 +87,41 @@ pub struct DeviceInfoDto {
     pub online: bool,
 }
 
+/// One flattened DMX port on an Art-Net product (see `DeviceRegistry::aggregate_products`).
+#[derive(Clone, serde::Serialize)]
+pub struct ProductPortDto {
+    pub bind_index: u8,
+    pub slot: u8,
+    pub output_universe: u16,
+    pub input_universe: Option<u16>,
+    pub label: String,
+}
+
+/// One physical Art-Net node, merged from all BindIndex replies for the same bind IP + MAC.
+#[derive(Clone, serde::Serialize)]
+pub struct ArtNetProductDto {
+    pub product_id: String,
+    pub bind_ip: String,
+    pub ip_address: String,
+    pub mac_address: String,
+    pub short_name: String,
+    pub long_name: String,
+    pub esta_man: u16,
+    pub oem_code: u16,
+    pub firmware_version: u16,
+    pub node_report: String,
+    pub ports: Vec<ProductPortDto>,
+    pub online: bool,
+    /// When set, send management packets (e.g. ArtIpProg) here instead of `ip_address:6454`.
+    pub transport_addr: Option<String>,
+}
+
 /// Event payload for frontend device updates (D5 push path).
 #[derive(Clone, serde::Serialize)]
 pub struct DevicesUpdatedDto {
     pub version: u64,
     pub timestamp_nanos: u64,
-    pub devices: Vec<DeviceInfoDto>,
+    pub products: Vec<ArtNetProductDto>,
 }
 
 fn format_hex_bytes(bytes: &[u8]) -> String {
@@ -145,6 +174,47 @@ fn map_device_to_dto(d: DeviceInfo, cutoff: Instant) -> DeviceInfoDto {
     }
 }
 
+fn artnet_product_id(bind_ip: std::net::Ipv4Addr, mac: &[u8; 6]) -> String {
+    let mac_s: String = mac.iter().map(|b| format!("{b:02X}")).collect();
+    format!("{bind_ip}|{mac_s}")
+}
+
+fn map_artnet_product_to_dto(p: ArtNetProduct, cutoff: Instant) -> ArtNetProductDto {
+    ArtNetProductDto {
+        product_id: artnet_product_id(p.bind_ip, &p.mac_address),
+        bind_ip: p.bind_ip.to_string(),
+        ip_address: p.ip_address.to_string(),
+        mac_address: format!(
+            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            p.mac_address[0],
+            p.mac_address[1],
+            p.mac_address[2],
+            p.mac_address[3],
+            p.mac_address[4],
+            p.mac_address[5],
+        ),
+        short_name: p.short_name,
+        long_name: p.long_name,
+        esta_man: p.esta_man,
+        oem_code: p.oem_code,
+        firmware_version: p.firmware_version,
+        node_report: p.node_report,
+        ports: p
+            .ports
+            .into_iter()
+            .map(|port| ProductPortDto {
+                bind_index: port.bind_index,
+                slot: port.slot,
+                output_universe: port.output_universe,
+                input_universe: port.input_universe,
+                label: port.label,
+            })
+            .collect(),
+        online: p.last_seen >= cutoff,
+        transport_addr: p.last_reply_source.map(|a| a.to_string()),
+    }
+}
+
 /// Serializable diagnostic entry for the frontend.
 #[derive(serde::Serialize)]
 pub struct DiagEntryDto {
@@ -187,6 +257,9 @@ pub struct IpProgParams {
     pub enable_programming: bool,
     /// Enable DHCP (bit 6).
     pub enable_dhcp: bool,
+    /// When set (e.g. `127.0.0.1:6457`), send ArtIpProg here instead of `target_ip:6454`.
+    /// Required for Docker port-mapped nodes whose advertised IP is not host-routable.
+    pub transport: Option<String>,
 }
 
 /// Reply data from ArtIpProgReply.
@@ -197,6 +270,16 @@ pub struct IpProgReplyDto {
     pub gateway: String,
     pub port: u16,
     pub dhcp_enabled: bool,
+}
+
+fn parse_optional_ipv4(value: Option<&str>, field_name: &str) -> Result<Option<std::net::Ipv4Addr>, String> {
+    match value.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(s) => s
+            .parse::<std::net::Ipv4Addr>()
+            .map(Some)
+            .map_err(|e| format!("Invalid {field_name}: {e}")),
+        None => Ok(None),
+    }
 }
 
 /// Tauri command: sends ArtIpProg UNICAST to target device and waits for ArtIpProgReply.
@@ -214,26 +297,30 @@ pub async fn send_ip_prog(params: IpProgParams) -> Result<IpProgReplyDto, String
         .parse()
         .map_err(|e| format!("Invalid target IP: {e}"))?;
 
-    let target = SocketAddr::from((target_ip, ART_NET_PORT));
+    let target = if let Some(ref t) = params.transport {
+        let t = t.trim();
+        t.parse::<SocketAddr>()
+            .map_err(|e| format!("Invalid transport address {t:?}: {e}"))?
+    } else {
+        SocketAddr::from((target_ip, ART_NET_PORT))
+    };
+
+    let parsed_ip = parse_optional_ipv4(params.new_ip.as_deref(), "new_ip")?;
+    let parsed_subnet = parse_optional_ipv4(params.subnet_mask.as_deref(), "subnet_mask")?;
+    let parsed_gateway = parse_optional_ipv4(params.gateway.as_deref(), "gateway")?;
 
     let config = IpProgConfig {
         enable_programming: params.enable_programming,
         enable_dhcp: params.enable_dhcp,
-        program_gateway: params.gateway.is_some(),
+        program_gateway: parsed_gateway.is_some(),
         reset: false,
-        program_ip: params.new_ip.is_some(),
-        program_subnet: params.subnet_mask.is_some(),
+        program_ip: parsed_ip.is_some(),
+        program_subnet: parsed_subnet.is_some(),
         program_port: params.port.is_some(),
-        ip: params
-            .new_ip
-            .as_ref()
-            .and_then(|s| s.parse().ok()),
-        subnet_mask: params
-            .subnet_mask
-            .as_ref()
-            .and_then(|s| s.parse().ok()),
+        ip: parsed_ip,
+        subnet_mask: parsed_subnet,
         port: params.port,
-        gateway: params.gateway.as_ref().and_then(|s| s.parse().ok()),
+        gateway: parsed_gateway,
     };
 
     let packet = build_art_ip_prog(&config);
@@ -250,27 +337,37 @@ pub async fn send_ip_prog(params: IpProgParams) -> Result<IpProgReplyDto, String
     let mut recv_buf = [0u8; 256];
     let timeout = Duration::from_secs(2);
 
-    let (len, _from) = tokio::time::timeout(
-        timeout,
-        socket.inner().recv_from(&mut recv_buf),
-    )
-    .await
-    .map_err(|_| "Timeout: no ArtIpProgReply received within 2 seconds")?
-    .map_err(|e| format!("Recv error: {e}"))?;
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            return Err("Timeout: no ArtIpProgReply received within 2 seconds".to_string());
+        }
+        let remaining = deadline - now;
 
-    let payload = &recv_buf[..len];
-    match ArtNetParser::parse(payload) {
-        Ok(lumenflow_core::ArtNetPacket::IpProgReply(reply)) => Ok(IpProgReplyDto {
-            ip: reply.ip().to_string(),
-            subnet_mask: reply.subnet_mask().to_string(),
-            gateway: reply.gateway().to_string(),
-            port: reply.port(),
-            dhcp_enabled: reply.dhcp_enabled(),
-        }),
-        Ok(other) => Err(format!(
-            "Unexpected packet type (expected IpProgReply): {other:?}"
-        )),
-        Err(e) => Err(format!("Failed to parse reply: {e}")),
+        let (len, from) = tokio::time::timeout(remaining, socket.inner().recv_from(&mut recv_buf))
+            .await
+            .map_err(|_| "Timeout: no ArtIpProgReply received within 2 seconds")?
+            .map_err(|e| format!("Recv error: {e}"))?;
+
+        if from.ip() != target.ip() {
+            continue;
+        }
+
+        let payload = &recv_buf[..len];
+        match ArtNetParser::parse(payload) {
+            Ok(lumenflow_core::ArtNetPacket::IpProgReply(reply)) => {
+                return Ok(IpProgReplyDto {
+                    ip: reply.ip().to_string(),
+                    subnet_mask: reply.subnet_mask().to_string(),
+                    gateway: reply.gateway().to_string(),
+                    port: reply.port(),
+                    dhcp_enabled: reply.dhcp_enabled(),
+                });
+            }
+            Ok(_) => continue,
+            Err(_) => continue,
+        }
     }
 }
 
@@ -335,7 +432,7 @@ pub async fn request_device_url(
 
 const DEVICE_ONLINE_THRESHOLD_SECS: u64 = 3;
 
-/// Tauri command: returns all discovered Art-Net devices.
+/// Tauri command: returns all discovered Art-Net devices (flat per-bind view).
 #[tauri::command]
 pub fn get_devices(state: tauri::State<'_, AppState>) -> Vec<DeviceInfoDto> {
     let cutoff = Instant::now() - Duration::from_secs(DEVICE_ONLINE_THRESHOLD_SECS);
@@ -344,6 +441,18 @@ pub fn get_devices(state: tauri::State<'_, AppState>) -> Vec<DeviceInfoDto> {
         .list_devices()
         .into_iter()
         .map(|d| map_device_to_dto(d, cutoff))
+        .collect()
+}
+
+/// Tauri command: returns merged Art-Net products (one row per physical node).
+#[tauri::command]
+pub fn get_artnet_products(state: tauri::State<'_, AppState>) -> Vec<ArtNetProductDto> {
+    let cutoff = Instant::now() - Duration::from_secs(DEVICE_ONLINE_THRESHOLD_SECS);
+    state
+        .device_registry
+        .aggregate_products()
+        .into_iter()
+        .map(|p| map_artnet_product_to_dto(p, cutoff))
         .collect()
 }
 
@@ -463,15 +572,15 @@ pub fn start_emit_loop(app_handle: tauri::AppHandle, state: &AppState) {
                 let current_version = device_version.load(Ordering::Relaxed);
                 if current_version != last_emitted_device_version {
                     let cutoff = Instant::now() - Duration::from_secs(DEVICE_ONLINE_THRESHOLD_SECS);
-                    let devices = device_registry
-                        .list_devices()
+                    let products = device_registry
+                        .aggregate_products()
                         .into_iter()
-                        .map(|d| map_device_to_dto(d, cutoff))
+                        .map(|p| map_artnet_product_to_dto(p, cutoff))
                         .collect();
                     let payload = DevicesUpdatedDto {
                         version: current_version,
                         timestamp_nanos: epoch_nanos(),
-                        devices,
+                        products,
                     };
                     let _ = app_handle.emit("devices-updated", payload);
                     last_emitted_device_version = current_version;
@@ -581,6 +690,7 @@ async fn run_udp_listener(
             port_addresses: Vec::new(),
             input_port_addresses: Vec::new(),
             last_seen: std::time::Instant::now(),
+            last_reply_source: None,
         };
         device_registry.upsert(self_device);
         device_version.fetch_add(1, Ordering::Relaxed);
@@ -718,6 +828,7 @@ async fn run_udp_listener(
                                 port_addresses: reply.output_port_addresses(),
                                 input_port_addresses: reply.input_port_addresses(),
                                 last_seen: std::time::Instant::now(),
+                                last_reply_source: Some(addr),
                             };
                             tracing::info!(
                                 ip = %device.ip_address,
@@ -922,6 +1033,7 @@ pub fn start_network_listeners(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lumenflow_core::device::ProductPort;
     use std::net::Ipv4Addr;
 
     fn sample_device() -> DeviceInfo {
@@ -960,6 +1072,7 @@ mod tests {
             port_addresses: vec![0x0001, 0x0002],
             input_port_addresses: vec![0x0001],
             last_seen: Instant::now(),
+            last_reply_source: None,
         }
     }
 
@@ -973,5 +1086,84 @@ mod tests {
         assert_eq!(dto.port_addresses.len(), 2);
         assert!(dto.online);
         assert!(!dto.def_resp.is_empty());
+    }
+
+    #[test]
+    fn maps_artnet_product_to_frontend_dto() {
+        let cutoff = Instant::now() - Duration::from_secs(3);
+        let p = ArtNetProduct {
+            bind_ip: Ipv4Addr::new(10, 0, 0, 10),
+            ip_address: Ipv4Addr::new(10, 0, 0, 10),
+            last_reply_source: None,
+            mac_address: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55],
+            short_name: "Root".to_string(),
+            long_name: "Long Node".to_string(),
+            esta_man: 0x7a70,
+            oem_code: 0x1234,
+            firmware_version: 0x0100,
+            node_report: "OK".to_string(),
+            ports: vec![ProductPort {
+                bind_index: 1,
+                slot: 0,
+                output_universe: 0x0005,
+                input_universe: None,
+                label: "Port 1".to_string(),
+            }],
+            last_seen: Instant::now(),
+        };
+        let dto = map_artnet_product_to_dto(p, cutoff);
+        assert_eq!(dto.ports.len(), 1);
+        assert_eq!(dto.ports[0].output_universe, 0x0005);
+        assert!(dto.online);
+        assert!(dto.product_id.contains("10.0.0.10"));
+        assert!(dto.product_id.contains("001122334455"));
+        assert_eq!(dto.transport_addr, None);
+    }
+
+    #[test]
+    fn maps_transport_addr_from_last_reply_source() {
+        use std::net::SocketAddr;
+        let cutoff = Instant::now() - Duration::from_secs(3);
+        let p = ArtNetProduct {
+            bind_ip: Ipv4Addr::new(10, 0, 0, 10),
+            ip_address: Ipv4Addr::new(10, 0, 0, 10),
+            last_reply_source: Some(SocketAddr::from(([127, 0, 0, 1], 6457))),
+            mac_address: [0x00; 6],
+            short_name: "N".into(),
+            long_name: "L".into(),
+            esta_man: 0,
+            oem_code: 0,
+            firmware_version: 0,
+            node_report: "".into(),
+            ports: vec![],
+            last_seen: Instant::now(),
+        };
+        let dto = map_artnet_product_to_dto(p, cutoff);
+        assert_eq!(dto.transport_addr.as_deref(), Some("127.0.0.1:6457"));
+    }
+
+    #[test]
+    fn parse_optional_ipv4_empty_is_none() {
+        assert_eq!(
+            parse_optional_ipv4(Some("   "), "new_ip")
+                .expect("whitespace should be treated as empty"),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_optional_ipv4_valid_is_some() {
+        assert_eq!(
+            parse_optional_ipv4(Some(" 192.168.1.10 "), "new_ip")
+                .expect("valid IPv4 should parse"),
+            Some(std::net::Ipv4Addr::new(192, 168, 1, 10))
+        );
+    }
+
+    #[test]
+    fn parse_optional_ipv4_invalid_is_error() {
+        let err =
+            parse_optional_ipv4(Some("999.1.1.1"), "new_ip").expect_err("invalid IPv4 should error");
+        assert!(err.contains("Invalid new_ip"));
     }
 }

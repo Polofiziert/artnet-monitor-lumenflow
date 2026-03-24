@@ -233,7 +233,7 @@ cargo run -p lumenflow_cli -- virtual-console --name "Desk B" --ip 127.0.0.3 --b
 
 ### Virtual Node
 
-Receives ArtDmx and responds to ArtPoll. Sends ArtPollReply periodically to `--target` for discovery (needed when on port 6455, since ArtPoll broadcast goes to 6454). Use `--port 6455` when LumenFlow runs on the same machine.
+Receives ArtDmx and responds to **ArtPoll** only (like real gear). Optional `--periodic-poll-reply` unicasts PollReply to `--target` for lab discovery without a poller. Use `--port 6455` when LumenFlow runs on the same machine.
 
 ```bash
 cargo run -p lumenflow_cli -- virtual-node --port 6455 --target 127.0.0.1
