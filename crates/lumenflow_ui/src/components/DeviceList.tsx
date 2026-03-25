@@ -1,9 +1,11 @@
 import type { Component } from "solid-js";
-import { createSignal, createMemo, createEffect, For, Show, onCleanup } from "solid-js";
-import IpProgDialog from "./IpProgDialog";
+import { createSignal, createMemo, createEffect, For, Show, Index, onCleanup } from "solid-js";
 import { open } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
+import type { IpProgReplyDto } from "./IpProgDialog";
 import { useDiagLog, priorityColor, priorityLabel } from "../hooks/useDiagLog";
 import type { PollReplyActivity } from "../hooks/useDevices";
+import { reconcilePendingEdits, type PendingEdit } from "../lib/pendingEdits";
 
 /** Art-Net 4 DataRequest types for URL fetching */
 const DR_URL_PRODUCT = 0x0001;
@@ -63,13 +65,16 @@ interface DeviceListProps {
   manualDevices?: ManualDeviceEntry[];
   onAddManualDevice?: (ip: string, name?: string) => void;
   onRemoveManualDevice?: (ip: string) => void;
+  onReadCurrent?: () => Promise<void> | void;
 }
 
 interface PollReplyPulseDotProps {
-  activity?: PollReplyActivity;
+  activity?: PollReplyActivity | undefined;
   tooltip: string;
-  testId?: string;
+  testId?: string | undefined;
 }
+
+type EditableField = "ip" | "long_name" | "port_name" | "port_out" | "port_in";
 
 const PollReplyPulseDot: Component<PollReplyPulseDotProps> = (props) => {
   const [burst, setBurst] = createSignal(false);
@@ -127,6 +132,31 @@ function formatPortAddress(p: number): string {
   return `${net}:${sub}:${uni}`;
 }
 
+function parsePortAddress(input: string): { value?: number; error?: string } {
+  const s = input.trim();
+  if (!s) return { error: "Empty port address." };
+  if (/^\d+$/.test(s)) {
+    const v = Number(s);
+    if (!Number.isFinite(v) || v < 0 || v > 0x7fff) {
+      return { error: "Port address must be 0..32767." };
+    }
+    return { value: v };
+  }
+  const parts = s.split(":").map((p) => p.trim());
+  if (parts.length !== 3) return { error: "Expected Net:SubNet:Universe (e.g. 0:0:1)." };
+  const [netS, subS, uniS] = parts;
+  const net = Number(netS);
+  const sub = Number(subS);
+  const uni = Number(uniS);
+  if (![net, sub, uni].every((n) => Number.isInteger(n))) {
+    return { error: "Net/SubNet/Universe must be integers." };
+  }
+  if (net < 0 || net > 127) return { error: "Net must be 0..127." };
+  if (sub < 0 || sub > 15) return { error: "SubNet must be 0..15." };
+  if (uni < 0 || uni > 15) return { error: "Universe must be 0..15." };
+  return { value: (net << 8) | (sub << 4) | uni };
+}
+
 function hex(value: number, width = 2): string {
   return `0x${value.toString(16).toUpperCase().padStart(width, "0")}`;
 }
@@ -136,13 +166,27 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   const [filter, setFilter] = createSignal("");
   const [deviceFilter, setDeviceFilter] = createSignal<DeviceFilter>("all");
   const [detailTab, setDetailTab] = createSignal<DeviceTab>("overview");
-  const [ipProgTarget, setIpProgTarget] = createSignal<string | null>(null);
-  /** UDP path for ArtIpProg when discovered via port mapping (e.g. Docker). */
-  const [ipProgTransport, setIpProgTransport] = createSignal<string | null>(null);
   const [deviceUrls, setDeviceUrls] = createSignal<Record<string, DeviceUrls>>({});
   const [addDeviceOpen, setAddDeviceOpen] = createSignal(false);
   const [addDeviceIp, setAddDeviceIp] = createSignal("");
   const [addDeviceName, setAddDeviceName] = createSignal("");
+  const [editingLongName, setEditingLongName] = createSignal(false);
+  const [editingIp, setEditingIp] = createSignal(false);
+  const [editingIpProgField, setEditingIpProgField] = createSignal<
+    "subnet_mask" | "gateway" | "port" | null
+  >(null);
+  // One active inline editor in the ports table at a time:
+  // - "port:<bind>:<slot>" for port label
+  // - "out:<bind>:<slot>" for output universe
+  // - "in:<bind>:<slot>" for input universe
+  const [editingPortKey, setEditingPortKey] = createSignal<string | null>(null);
+  const [editingValue, setEditingValue] = createSignal("");
+  const [pendingEdits, setPendingEdits] = createSignal<Record<string, PendingEdit>>({});
+  const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>({});
+  const [fieldLoading, setFieldLoading] = createSignal<Record<string, boolean>>({});
+  const [ipProgByProductId, setIpProgByProductId] = createSignal<
+    Record<string, { reply: IpProgReplyDto; receivedAtMs: number }>
+  >({});
   const log = useDiagLog();
 
   /** Merge backend products with manual-only entries (by IP). */
@@ -205,9 +249,65 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     return mergedProducts().find((d) => d.product_id === id);
   });
 
+  const selectedPollBundleCount = () =>
+    selectedDevice() ? (pollActivityFor(selectedDevice()!.product_id)?.bundleCount ?? 0) : 0;
+
+  const beginEdit = (key: string, currentValue: string) => {
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    setEditingIp(false);
+    setEditingLongName(false);
+    setEditingIpProgField(null);
+    setEditingPortKey(null);
+    setEditingValue(currentValue);
+  };
+
+  const portFieldKey = (bindIndex: number, slot: number) =>
+    `port:${bindIndex}:${slot}`;
+  const outFieldKey = (bindIndex: number, slot: number) =>
+    `out:${bindIndex}:${slot}`;
+  const inFieldKey = (bindIndex: number, slot: number) =>
+    `in:${bindIndex}:${slot}`;
+
+  const markPendingEdit = (
+    key: string,
+    productId: string,
+    field: EditableField,
+    expectedValue: string,
+    baselineValue: string,
+  ) => {
+    setPendingEdits((prev) => ({
+      ...prev,
+      [key]: {
+        productId,
+        field,
+        expectedValue,
+        baselineValue,
+        sentAtBundleCount: selectedPollBundleCount(),
+      },
+    }));
+  };
+
+  const setLoadingForField = (key: string, loading: boolean) => {
+    setFieldLoading((prev) => ({ ...prev, [key]: loading }));
+  };
+
+  const fieldSpinner = (key: string) => (
+    <Show when={fieldLoading()[key]}>
+      <span
+        class="ml-1 inline-block h-3 w-3 animate-spin rounded-full border border-teal/50 border-t-teal align-middle"
+        title="Sending update…"
+      />
+    </Show>
+  );
+
   const selectDevice = (device: ArtNetProductDto) => {
     setSelectedProductId(device.product_id);
     if (detailTab() === "comms") setDetailTab("overview");
+    setEditingIp(false);
+    setEditingLongName(false);
+    setEditingPortKey(null);
+    setEditingValue("");
+    setFieldErrors({});
   };
 
   const fetchDeviceUrls = async (device: ArtNetProductDto) => {
@@ -261,6 +361,341 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   };
 
   const urlsFor = (ip: string) => deviceUrls()[ip];
+
+  const isValidIpv4 = (value: string) => {
+    const m = value.match(/^(\d{1,3}\.){3}\d{1,3}$/);
+    if (!m) return false;
+    return value.split(".").every((part) => {
+      const num = Number(part);
+      return Number.isInteger(num) && num >= 0 && num <= 255;
+    });
+  };
+
+  const submitIpEdit = async () => {
+    const device = selectedDevice();
+    if (!device) return;
+    const key = "ip";
+    const nextIp = editingValue().trim();
+    if (!isValidIpv4(nextIp)) {
+      setFieldErrors((prev) => ({ ...prev, [key]: "Invalid IPv4 address." }));
+      return;
+    }
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    setEditingIp(false);
+    setLoadingForField(key, true);
+    const baselineIp = device.ip_address;
+    const productId = device.product_id;
+    const transportAddr = device.transport_addr ?? null;
+    void invoke("send_ip_prog", {
+      params: {
+        target_ip: baselineIp,
+        transport: transportAddr,
+        new_ip: nextIp,
+        subnet_mask: null,
+        gateway: null,
+        port: null,
+        enable_programming: true,
+        enable_dhcp: false,
+      },
+    })
+      .then(() => {
+        markPendingEdit(key, productId, "ip", nextIp, baselineIp);
+        props.onReadCurrent?.();
+      })
+      .catch((e) => {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [key]: e instanceof Error ? e.message : String(e),
+        }));
+      })
+      .finally(() => {
+        setLoadingForField(key, false);
+      });
+  };
+
+  const ipProgForSelected = () => {
+    const d = selectedDevice();
+    if (!d) return undefined;
+    return ipProgByProductId()[d.product_id];
+  };
+
+  const readIpProg = async (device: ArtNetProductDto) => {
+    const key = `ipprog_read:${device.product_id}`;
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    setLoadingForField(key, true);
+    const transportAddr = device.transport_addr ?? null;
+    const targetIp = device.ip_address;
+    void invoke<IpProgReplyDto>("send_ip_prog", {
+      params: {
+        target_ip: targetIp,
+        transport: transportAddr,
+        new_ip: null,
+        subnet_mask: null,
+        gateway: null,
+        port: null,
+        enable_programming: false,
+        enable_dhcp: false,
+      },
+    })
+      .then((reply) => {
+        setIpProgByProductId((prev) => ({
+          ...prev,
+          [device.product_id]: { reply, receivedAtMs: Date.now() },
+        }));
+      })
+      .catch((e) => {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [key]: e instanceof Error ? e.message : String(e),
+        }));
+      })
+      .finally(() => setLoadingForField(key, false));
+  };
+
+  const submitIpProgField = async (
+    device: ArtNetProductDto,
+    field: "subnet_mask" | "gateway" | "port",
+  ) => {
+    const key = `ipprog_${field}:${device.product_id}`;
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    const nextRaw = editingValue().trim();
+    if (!nextRaw) {
+      setFieldErrors((prev) => ({ ...prev, [key]: "Value is required." }));
+      return;
+    }
+    if ((field === "subnet_mask" || field === "gateway") && !isValidIpv4(nextRaw)) {
+      setFieldErrors((prev) => ({ ...prev, [key]: "Invalid IPv4 address." }));
+      return;
+    }
+    let portValue: number | null = null;
+    if (field === "port") {
+      const v = Number(nextRaw);
+      if (!Number.isInteger(v) || v < 1 || v > 65535) {
+        setFieldErrors((prev) => ({ ...prev, [key]: "Port must be 1..65535." }));
+        return;
+      }
+      portValue = v;
+    }
+
+    setLoadingForField(key, true);
+    setEditingValue("");
+
+    const transportAddr = device.transport_addr ?? null;
+    const targetIp = device.ip_address;
+    void invoke<IpProgReplyDto>("send_ip_prog", {
+      params: {
+        target_ip: targetIp,
+        transport: transportAddr,
+        new_ip: null,
+        subnet_mask: field === "subnet_mask" ? nextRaw : null,
+        gateway: field === "gateway" ? nextRaw : null,
+        port: field === "port" ? portValue : null,
+        enable_programming: true,
+        enable_dhcp: false,
+      },
+    })
+      .then((reply) => {
+        // Backend returns IpProgReplyDto; treat as updated "last read" snapshot.
+        setIpProgByProductId((prev) => ({
+          ...prev,
+          [device.product_id]: { reply, receivedAtMs: Date.now() },
+        }));
+      })
+      .catch((e) => {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [key]: e instanceof Error ? e.message : String(e),
+        }));
+      })
+      .finally(() => setLoadingForField(key, false));
+  };
+
+  const submitLongNameEdit = async () => {
+    const device = selectedDevice();
+    if (!device) return;
+    const key = "long_name";
+    const nextLongName = editingValue().trim();
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    setEditingLongName(false);
+    setLoadingForField(key, true);
+    const baselineLongName = device.long_name;
+    const productId = device.product_id;
+    const targetIp = device.ip_address;
+    const transportAddr = device.transport_addr ?? null;
+    const bindIndex = device.ports[0]?.bind_index ?? 1;
+    void invoke("send_art_address", {
+      params: {
+        target_ip: targetIp,
+        transport: transportAddr,
+        bind_index: bindIndex,
+        long_name: nextLongName,
+        port_name: null,
+      },
+    })
+      .then(() => {
+        markPendingEdit(
+          key,
+          productId,
+          "long_name",
+          nextLongName,
+          baselineLongName,
+        );
+        props.onReadCurrent?.();
+      })
+      .catch((e) => {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [key]: e instanceof Error ? e.message : String(e),
+        }));
+      })
+      .finally(() => {
+        setLoadingForField(key, false);
+      });
+  };
+
+  const submitPortNameEdit = async (bindIndex: number, slot: number, currentLabel: string) => {
+    const device = selectedDevice();
+    if (!device) return;
+    const key = portFieldKey(bindIndex, slot);
+    const nextPortName = editingValue().trim();
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    setEditingPortKey(null);
+    setLoadingForField(key, true);
+    const productId = device.product_id;
+    const targetIp = device.ip_address;
+    const transportAddr = device.transport_addr ?? null;
+    void invoke("send_art_address", {
+      params: {
+        target_ip: targetIp,
+        transport: transportAddr,
+        bind_index: bindIndex,
+        long_name: null,
+        port_name: nextPortName,
+      },
+    })
+      .then(() => {
+        markPendingEdit(
+          key,
+          productId,
+          "port_name",
+          nextPortName,
+          currentLabel,
+        );
+        props.onReadCurrent?.();
+      })
+      .catch((e) => {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [key]: e instanceof Error ? e.message : String(e),
+        }));
+      })
+      .finally(() => {
+        setLoadingForField(key, false);
+      });
+  };
+
+  const submitPortOutEdit = async (bindIndex: number, slot: number, currentValue: number) => {
+    const device = selectedDevice();
+    if (!device) return;
+    const key = outFieldKey(bindIndex, slot);
+    const parsed = parsePortAddress(editingValue());
+    if (parsed.error) {
+      setFieldErrors((prev) => ({ ...prev, [key]: parsed.error! }));
+      return;
+    }
+    const nextAddr = parsed.value!;
+    // Safety: only allow changing the universe nibble unless Net/SubNet match current.
+    if (((nextAddr >> 4) & 0x7ff) !== ((currentValue >> 4) & 0x7ff)) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [key]: "Changing Net/SubNet via ArtAddress is not supported yet. Keep Net/SubNet the same and adjust only Universe (last digit).",
+      }));
+      return;
+    }
+
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    setEditingPortKey(null);
+    setLoadingForField(key, true);
+    const productId = device.product_id;
+    const targetIp = device.ip_address;
+    const transportAddr = device.transport_addr ?? null;
+
+    void invoke("send_art_address", {
+      params: {
+        target_ip: targetIp,
+        transport: transportAddr,
+        bind_index: bindIndex,
+        long_name: null,
+        port_name: null,
+        set_output_universe: { slot, universe: nextAddr },
+      },
+    })
+      .then(() => {
+        markPendingEdit(key, productId, "port_out", String(nextAddr), String(currentValue));
+        props.onReadCurrent?.();
+      })
+      .catch((e) => {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [key]: e instanceof Error ? e.message : String(e),
+        }));
+      })
+      .finally(() => setLoadingForField(key, false));
+  };
+
+  const submitPortInEdit = async (
+    bindIndex: number,
+    slot: number,
+    currentValue: number | null | undefined,
+    outputUniverseForBaseline: number,
+  ) => {
+    const device = selectedDevice();
+    if (!device) return;
+    const key = inFieldKey(bindIndex, slot);
+    const parsed = parsePortAddress(editingValue());
+    if (parsed.error) {
+      setFieldErrors((prev) => ({ ...prev, [key]: parsed.error! }));
+      return;
+    }
+    const nextAddr = parsed.value!;
+    const baselineNetSub = (currentValue ?? outputUniverseForBaseline) >> 4;
+    if (((nextAddr >> 4) & 0x7ff) !== (baselineNetSub & 0x7ff)) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [key]: "Changing Net/SubNet via ArtAddress is not supported yet. Keep Net/SubNet the same and adjust only Universe (last digit).",
+      }));
+      return;
+    }
+
+    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    setEditingPortKey(null);
+    setLoadingForField(key, true);
+    const productId = device.product_id;
+    const targetIp = device.ip_address;
+    const transportAddr = device.transport_addr ?? null;
+
+    void invoke("send_art_address", {
+      params: {
+        target_ip: targetIp,
+        transport: transportAddr,
+        bind_index: bindIndex,
+        long_name: null,
+        port_name: null,
+        set_input_universe: { slot, universe: nextAddr },
+      },
+    })
+      .then(() => {
+        markPendingEdit(key, productId, "port_in", String(nextAddr), String(currentValue ?? ""));
+        props.onReadCurrent?.();
+      })
+      .catch((e) => {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [key]: e instanceof Error ? e.message : String(e),
+        }));
+      })
+      .finally(() => setLoadingForField(key, false));
+  };
 
   const submitAddDevice = () => {
     const ip = addDeviceIp().trim();
@@ -317,6 +752,17 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       "Behavior: flash is triggered by deduped PollReply bundle events.",
     ].join("\n");
   };
+
+  createEffect(() => {
+    const allPending = pendingEdits();
+    if (Object.keys(allPending).length === 0) return;
+    const { next, changed } = reconcilePendingEdits({
+      pending: allPending,
+      products: mergedProducts(),
+      activityById: props.pollReplyActivity?.() ?? {},
+    });
+    if (changed) setPendingEdits(next);
+  });
 
   return (
     <div data-testid="device-list" class="rounded-lg border border-edge bg-surface p-4">
@@ -398,16 +844,15 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         </div>
                       </button>
                       <div class="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIpProgTarget(device.ip_address);
-                            setIpProgTransport(device.transport_addr ?? null);
-                          }}
-                          class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-teal"
-                        >
-                          IP
-                        </button>
+                        <Show when={props.onReadCurrent}>
+                          <button
+                            type="button"
+                            onClick={() => props.onReadCurrent?.()}
+                            class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-teal"
+                          >
+                            Read current
+                          </button>
+                        </Show>
                         <button type="button" onClick={() => fetchDeviceUrls(device)} class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-primary">URLs</button>
                       </div>
                     </div>
@@ -440,7 +885,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                       <div class="mt-0.5 text-[11px] text-muted font-mono">{device.ip_address}</div>
                     </button>
                     <div class="flex items-center gap-1">
-                      <button type="button" onClick={() => setIpProgTarget(device.ip_address)} class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-teal">IP</button>
+                      <Show when={props.onReadCurrent}>
+                        <button type="button" onClick={() => props.onReadCurrent?.()} class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-teal">Read current</button>
+                      </Show>
                       <Show when={device.long_name === "Manual entry" && props.onRemoveManualDevice}>
                         <button
                           type="button"
@@ -490,7 +937,236 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
                 <Show when={detailTab() === "overview"}>
                   <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                    <span class="text-muted">Long Name</span><span class="text-secondary truncate" title={device().long_name}>{device().long_name}</span>
+                    <span class="text-muted">IP</span>
+                    <div class="min-w-0">
+                      <Show
+                        when={editingIp()}
+                        fallback={
+                          <button
+                            type="button"
+                            class="w-full truncate text-left font-mono text-secondary hover:text-teal"
+                            title="Double-click to edit IP"
+                            onDblClick={() => {
+                              beginEdit("ip", device().ip_address);
+                              setEditingIp(true);
+                            }}
+                          >
+                            {device().ip_address}
+                          </button>
+                        }
+                      >
+                        <input
+                          autofocus
+                          value={editingValue()}
+                          onInput={(e) => setEditingValue(e.currentTarget.value)}
+                          onBlur={() => setEditingIp(false)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") setEditingIp(false);
+                            if (e.key === "Enter") void submitIpEdit();
+                          }}
+                          class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                        />
+                      </Show>
+                      <Show when={editingIp()}>
+                        <div class="mt-1 text-[10px] text-amber">
+                          Warning: IP changes can disconnect the node from the rig network.
+                        </div>
+                      </Show>
+                      <div class="text-[10px] text-teal">{fieldSpinner("ip")}</div>
+                      <Show when={pendingEdits()["ip"]?.warning}>
+                        <div class="mt-1 text-[10px] text-amber">{pendingEdits()["ip"]?.warning}</div>
+                      </Show>
+                      <Show when={fieldErrors()["ip"]}>
+                        <div class="mt-1 text-[10px] text-error">{fieldErrors()["ip"]}</div>
+                      </Show>
+                    </div>
+                    <span class="text-muted">IP cfg</span>
+                    <div class="min-w-0">
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="text-[10px] uppercase tracking-wide text-muted">
+                          ArtIpProgReply
+                          <Show when={ipProgForSelected()}>
+                            <span class="ml-2 normal-case text-muted">
+                              (last read{" "}
+                              {new Date(ipProgForSelected()!.receivedAtMs).toLocaleTimeString("en-GB", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                                hour12: false,
+                              })}
+                              )
+                            </span>
+                          </Show>
+                        </div>
+                        <button
+                          type="button"
+                          class="rounded border border-edge px-2 py-1 text-[10px] uppercase tracking-wide text-muted hover:border-edge-active hover:text-secondary"
+                          onClick={() => void readIpProg(device())}
+                        >
+                          Read
+                        </button>
+                      </div>
+
+                      <Show
+                        when={ipProgForSelected()}
+                        fallback={<div class="mt-1 text-[11px] text-secondary">Not read yet.</div>}
+                      >
+                        <div class="mt-1 grid grid-cols-4 gap-x-2 gap-y-1 text-[11px]">
+                          <span class="text-muted">mask</span>
+                          <Show
+                            when={editingIpProgField() === "subnet_mask"}
+                            fallback={
+                              <button
+                                type="button"
+                                class="truncate text-left font-mono text-secondary hover:text-teal"
+                                title="Double-click to edit subnet mask"
+                                onDblClick={() => {
+                                  beginEdit(
+                                    `ipprog_subnet_mask:${device().product_id}`,
+                                    ipProgForSelected()!.reply.subnet_mask,
+                                  );
+                                  setEditingIpProgField("subnet_mask");
+                                }}
+                              >
+                                {ipProgForSelected()!.reply.subnet_mask}
+                              </button>
+                            }
+                          >
+                            <input
+                              autofocus
+                              value={editingValue()}
+                              onInput={(e) => setEditingValue(e.currentTarget.value)}
+                              onBlur={() => setEditingIpProgField(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") setEditingIpProgField(null);
+                                if (e.key === "Enter") void submitIpProgField(device(), "subnet_mask");
+                              }}
+                              class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                            />
+                          </Show>
+                          <span class="text-muted">gw</span>
+                          <Show
+                            when={editingIpProgField() === "gateway"}
+                            fallback={
+                              <button
+                                type="button"
+                                class="truncate text-left font-mono text-secondary hover:text-teal"
+                                title="Double-click to edit gateway"
+                                onDblClick={() => {
+                                  beginEdit(
+                                    `ipprog_gateway:${device().product_id}`,
+                                    ipProgForSelected()!.reply.gateway,
+                                  );
+                                  setEditingIpProgField("gateway");
+                                }}
+                              >
+                                {ipProgForSelected()!.reply.gateway}
+                              </button>
+                            }
+                          >
+                            <input
+                              autofocus
+                              value={editingValue()}
+                              onInput={(e) => setEditingValue(e.currentTarget.value)}
+                              onBlur={() => setEditingIpProgField(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") setEditingIpProgField(null);
+                                if (e.key === "Enter") void submitIpProgField(device(), "gateway");
+                              }}
+                              class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                            />
+                          </Show>
+
+                          <span class="text-muted">port</span>
+                          <Show
+                            when={editingIpProgField() === "port"}
+                            fallback={
+                              <button
+                                type="button"
+                                class="truncate text-left font-mono text-secondary hover:text-teal"
+                                title="Double-click to edit port"
+                                onDblClick={() => {
+                                  beginEdit(
+                                    `ipprog_port:${device().product_id}`,
+                                    String(ipProgForSelected()!.reply.port),
+                                  );
+                                  setEditingIpProgField("port");
+                                }}
+                              >
+                                {ipProgForSelected()!.reply.port}
+                              </button>
+                            }
+                          >
+                            <input
+                              autofocus
+                              value={editingValue()}
+                              onInput={(e) => setEditingValue(e.currentTarget.value)}
+                              onBlur={() => setEditingIpProgField(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") setEditingIpProgField(null);
+                                if (e.key === "Enter") void submitIpProgField(device(), "port");
+                              }}
+                              class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                            />
+                          </Show>
+                          <span class="text-muted">dhcp</span>
+                          <span class="font-mono text-secondary">
+                            {ipProgForSelected()!.reply.dhcp_enabled ? "on" : "off"}
+                          </span>
+                        </div>
+                      </Show>
+                      <div class="text-[10px] text-teal">{fieldSpinner(`ipprog_read:${device().product_id}`)}</div>
+                      <Show when={fieldErrors()[`ipprog_read:${device().product_id}`]}>
+                        <div class="mt-1 text-[10px] text-error">{fieldErrors()[`ipprog_read:${device().product_id}`]}</div>
+                      </Show>
+                      <Show when={fieldErrors()[`ipprog_subnet_mask:${device().product_id}`]}>
+                        <div class="mt-1 text-[10px] text-error">{fieldErrors()[`ipprog_subnet_mask:${device().product_id}`]}</div>
+                      </Show>
+                      <Show when={fieldErrors()[`ipprog_gateway:${device().product_id}`]}>
+                        <div class="mt-1 text-[10px] text-error">{fieldErrors()[`ipprog_gateway:${device().product_id}`]}</div>
+                      </Show>
+                      <Show when={fieldErrors()[`ipprog_port:${device().product_id}`]}>
+                        <div class="mt-1 text-[10px] text-error">{fieldErrors()[`ipprog_port:${device().product_id}`]}</div>
+                      </Show>
+                    </div>
+                    <span class="text-muted">Long Name</span>
+                    <div class="min-w-0">
+                      <Show
+                        when={editingLongName()}
+                        fallback={
+                          <button
+                            type="button"
+                            class="w-full truncate text-left text-secondary hover:text-teal"
+                            title={device().long_name}
+                            onDblClick={() => {
+                              beginEdit("long_name", device().long_name);
+                              setEditingLongName(true);
+                            }}
+                          >
+                            {device().long_name}
+                          </button>
+                        }
+                      >
+                        <input
+                          autofocus
+                          value={editingValue()}
+                          onInput={(e) => setEditingValue(e.currentTarget.value)}
+                          onBlur={() => setEditingLongName(false)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") setEditingLongName(false);
+                            if (e.key === "Enter") void submitLongNameEdit();
+                          }}
+                          class="w-full rounded border border-edge-active bg-surface px-2 py-1 text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                        />
+                      </Show>
+                      <div class="text-[10px] text-teal">{fieldSpinner("long_name")}</div>
+                      <Show when={pendingEdits()["long_name"]?.warning}>
+                        <div class="mt-1 text-[10px] text-amber">{pendingEdits()["long_name"]?.warning}</div>
+                      </Show>
+                      <Show when={fieldErrors()["long_name"]}>
+                        <div class="mt-1 text-[10px] text-error">{fieldErrors()["long_name"]}</div>
+                      </Show>
+                    </div>
                     <span class="text-muted">MAC</span><span class="font-mono text-secondary">{device().mac_address || "Not reported"}</span>
                     <span class="text-muted">Firmware</span><span class="font-mono text-secondary">{hex(device().firmware_version, 4)}</span>
                     <span class="text-muted">OEM / ESTA</span><span class="font-mono text-secondary">{hex(device().oem_code, 4)} / {hex(device().esta_man, 4)}</span>
@@ -503,14 +1179,25 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                   <div class="mt-3 border-t border-edge pt-3">
                     <div class="mb-2 flex items-center justify-between">
                       <span class="text-xs text-muted">Device URLs</span>
-                      <button
-                        type="button"
-                        onClick={() => fetchDeviceUrls(device())}
-                        disabled={urlsFor(device().ip_address)?.loading}
-                        class="rounded-md border border-edge bg-surface px-2 py-1 text-[11px] text-secondary hover:bg-surface-hover disabled:opacity-50"
-                      >
-                        {urlsFor(device().ip_address)?.loading ? "Fetching…" : "Fetch URLs"}
-                      </button>
+                      <div class="flex items-center gap-2">
+                        <Show when={props.onReadCurrent}>
+                          <button
+                            type="button"
+                            onClick={() => props.onReadCurrent?.()}
+                            class="rounded-md border border-edge bg-surface px-2 py-1 text-[11px] text-secondary hover:bg-surface-hover"
+                          >
+                            Read current
+                          </button>
+                        </Show>
+                        <button
+                          type="button"
+                          onClick={() => fetchDeviceUrls(device())}
+                          disabled={urlsFor(device().ip_address)?.loading}
+                          class="rounded-md border border-edge bg-surface px-2 py-1 text-[11px] text-secondary hover:bg-surface-hover disabled:opacity-50"
+                        >
+                          {urlsFor(device().ip_address)?.loading ? "Fetching…" : "Fetch URLs"}
+                        </button>
+                      </div>
                     </div>
                     <Show when={urlsFor(device().ip_address)?.error}><div class="mb-1 text-[11px] text-error">{urlsFor(device().ip_address)?.error}</div></Show>
                     <div class="flex flex-col gap-1 text-[11px]">
@@ -537,16 +1224,139 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                           </tr>
                         </thead>
                         <tbody>
-                          <For each={device().ports}>
+                          <Index each={device().ports}>
                             {(p) => (
                               <tr class="border-b border-edge/40">
-                                <td class="px-2 py-1 font-mono text-secondary">{p.bind_index}</td>
-                                <td class="px-2 py-1 text-primary">{p.label}</td>
-                                <td class="px-2 py-1 font-mono text-secondary">{formatPortAddress(p.output_universe)}</td>
-                                <td class="px-2 py-1 font-mono text-secondary">{p.input_universe != null ? formatPortAddress(p.input_universe) : "—"}</td>
+                                <td class="px-2 py-1 font-mono text-secondary">{p().bind_index}</td>
+                                <td class="px-2 py-1 text-primary">
+                                  <Show
+                                    when={editingPortKey() === portFieldKey(p().bind_index, p().slot)}
+                                    fallback={
+                                      <button
+                                        type="button"
+                                        class="w-full truncate text-left text-primary hover:text-teal"
+                                        title="Double-click to edit port name"
+                                        onDblClick={() => {
+                                          beginEdit(portFieldKey(p().bind_index, p().slot), p().label);
+                                          setEditingPortKey(portFieldKey(p().bind_index, p().slot));
+                                        }}
+                                      >
+                                        {p().label}
+                                      </button>
+                                    }
+                                  >
+                                    <input
+                                      autofocus
+                                      maxlength={17}
+                                      value={editingValue()}
+                                      onInput={(e) => setEditingValue(e.currentTarget.value)}
+                                      onBlur={() => setEditingPortKey(null)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape") setEditingPortKey(null);
+                                        if (e.key === "Enter") {
+                                          void submitPortNameEdit(p().bind_index, p().slot, p().label);
+                                        }
+                                      }}
+                                      class="w-full rounded border border-edge-active bg-surface px-2 py-1 text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                                    />
+                                  </Show>
+                                  <div class="text-[10px] text-teal">{fieldSpinner(portFieldKey(p().bind_index, p().slot))}</div>
+                                  <Show when={pendingEdits()[portFieldKey(p().bind_index, p().slot)]?.warning}>
+                                    <div class="mt-1 text-[10px] text-amber">{pendingEdits()[portFieldKey(p().bind_index, p().slot)]?.warning}</div>
+                                  </Show>
+                                  <Show when={fieldErrors()[portFieldKey(p().bind_index, p().slot)]}>
+                                    <div class="mt-1 text-[10px] text-error">{fieldErrors()[portFieldKey(p().bind_index, p().slot)]}</div>
+                                  </Show>
+                                </td>
+                                <td class="px-2 py-1 font-mono text-secondary">
+                                  <Show
+                                    when={editingPortKey() === outFieldKey(p().bind_index, p().slot)}
+                                    fallback={
+                                      <button
+                                        type="button"
+                                        class="w-full truncate text-left font-mono text-secondary hover:text-teal"
+                                        title="Double-click to edit output port address"
+                                        onDblClick={() => {
+                                          beginEdit(outFieldKey(p().bind_index, p().slot), formatPortAddress(p().output_universe));
+                                          setEditingPortKey(outFieldKey(p().bind_index, p().slot));
+                                        }}
+                                      >
+                                        {formatPortAddress(p().output_universe)}
+                                      </button>
+                                    }
+                                  >
+                                    <input
+                                      autofocus
+                                      value={editingValue()}
+                                      onInput={(e) => setEditingValue(e.currentTarget.value)}
+                                      onBlur={() => setEditingPortKey(null)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape") setEditingPortKey(null);
+                                        if (e.key === "Enter") {
+                                          void submitPortOutEdit(p().bind_index, p().slot, p().output_universe);
+                                        }
+                                      }}
+                                      class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                                    />
+                                  </Show>
+                                  <div class="text-[10px] text-teal">{fieldSpinner(outFieldKey(p().bind_index, p().slot))}</div>
+                                  <Show when={pendingEdits()[outFieldKey(p().bind_index, p().slot)]?.warning}>
+                                    <div class="mt-1 text-[10px] text-amber">{pendingEdits()[outFieldKey(p().bind_index, p().slot)]?.warning}</div>
+                                  </Show>
+                                  <Show when={fieldErrors()[outFieldKey(p().bind_index, p().slot)]}>
+                                    <div class="mt-1 text-[10px] text-error">{fieldErrors()[outFieldKey(p().bind_index, p().slot)]}</div>
+                                  </Show>
+                                </td>
+                                <td class="px-2 py-1 font-mono text-secondary">
+                                  <Show
+                                    when={editingPortKey() === inFieldKey(p().bind_index, p().slot)}
+                                    fallback={
+                                      <button
+                                        type="button"
+                                        class="w-full truncate text-left font-mono text-secondary hover:text-teal"
+                                        title="Double-click to edit input port address"
+                                        onDblClick={() => {
+                                          beginEdit(
+                                            inFieldKey(p().bind_index, p().slot),
+                                            p().input_universe != null ? formatPortAddress(p().input_universe) : "",
+                                          );
+                                          setEditingPortKey(inFieldKey(p().bind_index, p().slot));
+                                        }}
+                                      >
+                                        {p().input_universe != null ? formatPortAddress(p().input_universe) : "—"}
+                                      </button>
+                                    }
+                                  >
+                                    <input
+                                      autofocus
+                                      value={editingValue()}
+                                      onInput={(e) => setEditingValue(e.currentTarget.value)}
+                                      onBlur={() => setEditingPortKey(null)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape") setEditingPortKey(null);
+                                        if (e.key === "Enter") {
+                                          void submitPortInEdit(
+                                            p().bind_index,
+                                            p().slot,
+                                            p().input_universe,
+                                            p().output_universe,
+                                          );
+                                        }
+                                      }}
+                                      class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                                    />
+                                  </Show>
+                                  <div class="text-[10px] text-teal">{fieldSpinner(inFieldKey(p().bind_index, p().slot))}</div>
+                                  <Show when={pendingEdits()[inFieldKey(p().bind_index, p().slot)]?.warning}>
+                                    <div class="mt-1 text-[10px] text-amber">{pendingEdits()[inFieldKey(p().bind_index, p().slot)]?.warning}</div>
+                                  </Show>
+                                  <Show when={fieldErrors()[inFieldKey(p().bind_index, p().slot)]}>
+                                    <div class="mt-1 text-[10px] text-error">{fieldErrors()[inFieldKey(p().bind_index, p().slot)]}</div>
+                                  </Show>
+                                </td>
                               </tr>
                             )}
-                          </For>
+                          </Index>
                         </tbody>
                       </table>
                     </div>
@@ -599,20 +1409,6 @@ const DeviceList: Component<DeviceListProps> = (props) => {
           </Show>
         </div>
       </div>
-
-      <IpProgDialog
-        isOpen={() => ipProgTarget() !== null}
-        onClose={() => {
-          setIpProgTarget(null);
-          setIpProgTransport(null);
-        }}
-        targetIp={ipProgTarget() ?? ""}
-        transportAddr={ipProgTransport()}
-        deviceName={
-          mergedProducts().find((d) => d.ip_address === (ipProgTarget() ?? ""))
-            ?.short_name ?? ""
-        }
-      />
 
       {/* D2: Add device manually dialog */}
       <Show when={addDeviceOpen()}>

@@ -12,7 +12,7 @@ const MOCK_CHANNELS = new Array(512).fill(0) as number[];
 
 describe("ChannelInspector", () => {
   it("renders grid wrapper as the only flex child so layout is stable (B2)", () => {
-    const [channels, setChannels] = createSignal<number[]>(MOCK_CHANNELS);
+    const [channels] = createSignal<number[]>(MOCK_CHANNELS);
     render(() => (
       <ThemeProvider>
         <ChannelInspector universeId={0} channels={channels} />

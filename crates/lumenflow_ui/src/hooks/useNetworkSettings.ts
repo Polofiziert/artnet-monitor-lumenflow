@@ -48,7 +48,7 @@ export function useNetworkSettings(panelOpen: () => boolean) {
   const [settings, { refetch: refetchSettings }] = createResource(
     () => (panelOpen() ? "settings" : null),
     fetchSettings,
-    { initialValue: undefined as NetworkSettingsDto | undefined }
+    undefined
   );
 
   const [pendingSettings, setPendingSettings] =

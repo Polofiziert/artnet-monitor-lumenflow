@@ -40,6 +40,7 @@ async function indexOfSubmenuTitle(menu: Menu, title: string): Promise<number> {
   const items = await menu.items();
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
+    if (!item) continue;
     if (item.kind !== "Submenu") continue;
     const sub = item as Submenu;
     if ((await sub.text()) === title) return i;

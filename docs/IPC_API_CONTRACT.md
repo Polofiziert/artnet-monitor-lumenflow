@@ -52,6 +52,7 @@ This document defines the complete contract between the Tauri/Rust backend and t
 | `get_artnet_products`        | FE → BE   | —                                            | `ArtNetProductDto[]`    | One entry per physical node (bind IP + MAC); ports flattened across BindIndex. Primary for Devices and Routing.                  |
 | `get_diag_entries`           | FE → BE   | —                                            | `DiagEntryDto[]`        | Snapshot of diagnostic log. Used for initial load; `diag-entry` event for live updates.                                          |
 | `send_ip_prog`               | FE → BE   | `IpProgParams`                               | `IpProgReplyDto`        | Send ArtIpProg unicast to target device. Read-only or programming mode.                                                          |
+| `send_art_address`           | FE → BE   | `ArtAddressParams`                           | `void`                  | Send ArtAddress unicast to program names + per-port In/Out. Verify via subsequent ArtPollReply.                                  |
 | `request_device_url`         | FE → BE   | `{ target_ip, esta_man, oem, request_type }` | `string`                | Fetch product/user guide/support URL via ArtDataRequest. Use `oem` (not `oem_code`) as key; value from `ArtNetProductDto.oem_code` (or `DeviceInfoDto` for flat `get_devices`). |
 | `get_network_interfaces_cmd` | FE → BE   | —                                            | `NetworkInterfaceDto[]` | List IPv4 network interfaces (name, ip, subnet, broadcast). Used for NIC selection in Settings.                                  |
 | `get_network_settings_cmd`   | FE → BE   | —                                            | `NetworkSettingsDto`    | Persisted network config (interface mode, CIDR, discovery targets).                                                              |
@@ -323,6 +324,22 @@ interface IpProgReplyDto {
 
 ---
 
+### 5.4a ArtAddressParams
+
+```typescript
+interface ArtAddressParams {
+  target_ip: string;
+  transport?: string | null;
+  bind_index: number;
+  port_name?: string | null; // ArtAddress "short_name" field (per-port name)
+  long_name?: string | null;
+  set_output_universe?: { slot: number; universe: number } | null;
+  set_input_universe?: { slot: number; universe: number } | null;
+}
+```
+
+---
+
 ### 5.5 Timecode Event Payload
 
 ```typescript
@@ -489,7 +506,7 @@ pub struct AppState {
 | `route-info` event                      | Implemented | Per-universe source IPs, pkt/s for Routing Matrix                                                                                  |
 | `input_port_addresses` in DeviceInfoDto | Implemented | For routing matrix input subscriptions                                                                                             |
 | `network-stats` event                   | Planned     | Jitter, load, packet rate for NetworkDiagnostics                                                                                   |
-| ArtAddress command                      | Planned     | Remote node configuration                                                                                                          |
+| ArtAddress command                      | Implemented | `send_art_address` for remote Port Name / Long Name configuration. Verify via ArtPollReply updates.                              |
 | ArtInput command                        | Planned     | Enable/disable inputs                                                                                                              |
 | RDM commands                            | Planned     | Feature-gated                                                                                                                      |
 

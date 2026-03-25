@@ -138,6 +138,32 @@ mod tests {
     use crate::artnet::{ArtNetParser, ART_ADDRESS_NO_CHANGE};
 
     #[test]
+    fn build_art_address_programs_single_swout_nibble_with_bit7() {
+        let mut sw_out = [ART_ADDRESS_NO_CHANGE; 4];
+        sw_out[1] = 0x80 | 0x04;
+
+        let pkt = build_art_address(
+            ART_ADDRESS_NO_CHANGE,
+            2,
+            "",
+            "",
+            [ART_ADDRESS_NO_CHANGE; 4],
+            sw_out,
+            ART_ADDRESS_NO_CHANGE,
+            ArtAddressCommand::AcNone,
+        );
+
+        // SwOut starts at offset 100 (4 bytes).
+        assert_eq!(pkt[101], 0x84);
+        assert_eq!(pkt[100], ART_ADDRESS_NO_CHANGE);
+        assert_eq!(pkt[102], ART_ADDRESS_NO_CHANGE);
+        assert_eq!(pkt[103], ART_ADDRESS_NO_CHANGE);
+        // Ensure we didn't accidentally touch Net/Sub (remain no-change sentinel).
+        assert_eq!(pkt[12], ART_ADDRESS_NO_CHANGE);
+        assert_eq!(pkt[104], ART_ADDRESS_NO_CHANGE);
+    }
+
+    #[test]
     fn test_build_art_address_round_trip() {
         let pkt = build_art_address(
             0x80 | 0x03,

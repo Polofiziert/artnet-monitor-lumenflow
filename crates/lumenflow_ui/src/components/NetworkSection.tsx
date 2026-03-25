@@ -53,14 +53,6 @@ const NetworkSection: Component<NetworkSectionProps> = (props) => {
     });
   };
 
-  const selectAutoWithCidr = (cidr: string) => {
-    props.onApplyImmediate({
-      interface_mode: "auto",
-      preferred_ip_cidr: cidr,
-      primary_nic: null,
-    });
-  };
-
   const customTargetsText = () =>
     settings()?.custom_broadcast_targets?.join("\n") ?? "";
   const unicastTargetsText = () =>

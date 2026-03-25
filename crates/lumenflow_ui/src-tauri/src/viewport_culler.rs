@@ -5,7 +5,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use dashmap::DashSet;
-use lumenflow_core::artnet::{build_art_data_request, build_art_ip_prog, build_our_poll_reply, ArtNetParser, IpProgConfig, ART_NET_PORT};
+use lumenflow_core::artnet::{
+    build_art_address, build_art_data_request, build_art_ip_prog, build_our_poll_reply,
+    ArtAddressCommand, ArtNetParser, IpProgConfig, ART_ADDRESS_NO_CHANGE, ART_NET_PORT,
+};
 use lumenflow_core::build_art_poll;
 use lumenflow_core::buffer::UniverseStore;
 use lumenflow_core::device::{ArtNetProduct, DeviceInfo, DeviceRegistry};
@@ -313,6 +316,32 @@ pub struct IpProgReplyDto {
     pub dhcp_enabled: bool,
 }
 
+/// Parameters for remotely programming device names via ArtAddress.
+#[derive(serde::Deserialize)]
+pub struct ArtAddressParams {
+    /// Target device IP (string, e.g. "192.168.1.100").
+    pub target_ip: String,
+    /// Optional management transport override (e.g. "127.0.0.1:6457").
+    pub transport: Option<String>,
+    /// Bind index to program (1-based for most nodes).
+    pub bind_index: u8,
+    /// Optional Port Name (`short_name` field in wire packet; max 17 chars + null).
+    pub port_name: Option<String>,
+    /// Optional Long Name (max 63 chars + null).
+    pub long_name: Option<String>,
+    /// Optional: program output universe nibble for a port slot (0..3) in this bind page.
+    pub set_output_universe: Option<PortUniverseUpdate>,
+    /// Optional: program input universe nibble for a port slot (0..3) in this bind page.
+    pub set_input_universe: Option<PortUniverseUpdate>,
+}
+
+/// Per-port universe update for ArtAddress (slot 0..3; 15-bit port address 0..32767).
+#[derive(serde::Deserialize)]
+pub struct PortUniverseUpdate {
+    pub slot: u8,
+    pub universe: u16,
+}
+
 fn parse_optional_ipv4(value: Option<&str>, field_name: &str) -> Result<Option<std::net::Ipv4Addr>, String> {
     match value.map(str::trim).filter(|s| !s.is_empty()) {
         Some(s) => s
@@ -410,6 +439,109 @@ pub async fn send_ip_prog(params: IpProgParams) -> Result<IpProgReplyDto, String
             Err(_) => continue,
         }
     }
+}
+
+fn sanitize_artnet_text(value: Option<&str>, max: usize) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            let mut out = String::new();
+            for b in s.bytes() {
+                if out.len() >= max {
+                    break;
+                }
+                // Keep ASCII printable range expected by most Art-Net nodes and tools.
+                if (0x20..=0x7E).contains(&b) {
+                    out.push(char::from(b));
+                }
+            }
+            out
+        })
+        .filter(|s| !s.is_empty())
+}
+
+/// Tauri command: sends ArtAddress UNICAST to target device for name updates.
+///
+/// This command is fire-and-observe: Art-Net has no ACK for ArtAddress writes.
+/// Frontend verifies by comparing subsequent ArtPollReply data.
+///
+/// # Errors
+/// Returns error if target/transport is invalid, no mutable fields were provided,
+/// socket creation fails, or UDP send fails.
+#[tauri::command]
+pub async fn send_art_address(params: ArtAddressParams) -> Result<(), String> {
+    if params.bind_index == 0 {
+        return Err("Invalid bind_index: expected 1..=255".to_string());
+    }
+    let target_ip: std::net::Ipv4Addr = params
+        .target_ip
+        .parse()
+        .map_err(|e| format!("Invalid target IP: {e}"))?;
+    let target = if let Some(ref t) = params.transport {
+        let t = t.trim();
+        t.parse::<SocketAddr>()
+            .map_err(|e| format!("Invalid transport address {t:?}: {e}"))?
+    } else {
+        SocketAddr::from((target_ip, ART_NET_PORT))
+    };
+
+    let short_name = sanitize_artnet_text(params.port_name.as_deref(), 17).unwrap_or_default();
+    let long_name = sanitize_artnet_text(params.long_name.as_deref(), 63).unwrap_or_default();
+
+    let mut sw_in = [ART_ADDRESS_NO_CHANGE; 4];
+    let mut sw_out = [ART_ADDRESS_NO_CHANGE; 4];
+
+    if let Some(ref up) = params.set_output_universe {
+        if up.slot >= 4 {
+            return Err("Invalid output slot: expected 0..=3".to_string());
+        }
+        if up.universe > 0x7fff {
+            return Err("Invalid output universe: expected 0..=32767".to_string());
+        }
+        let uni_nibble = (up.universe & 0x0f) as u8;
+        // Spec: SwOut is ignored unless bit7 is high. We set bit7 and program only the nibble.
+        // NetSwitch/SubSwitch remain no-change (bit7 low) to avoid touching global Net/SubNet.
+        sw_out[up.slot as usize] = 0x80 | uni_nibble;
+    }
+    if let Some(ref up) = params.set_input_universe {
+        if up.slot >= 4 {
+            return Err("Invalid input slot: expected 0..=3".to_string());
+        }
+        if up.universe > 0x7fff {
+            return Err("Invalid input universe: expected 0..=32767".to_string());
+        }
+        let uni_nibble = (up.universe & 0x0f) as u8;
+        sw_in[up.slot as usize] = 0x80 | uni_nibble;
+    }
+
+    if short_name.is_empty()
+        && long_name.is_empty()
+        && params.set_output_universe.is_none()
+        && params.set_input_universe.is_none()
+    {
+        return Err("No ArtAddress update requested".to_string());
+    }
+
+    let packet = build_art_address(
+        ART_ADDRESS_NO_CHANGE,
+        params.bind_index,
+        &short_name,
+        &long_name,
+        sw_in,
+        sw_out,
+        ART_ADDRESS_NO_CHANGE,
+        ArtAddressCommand::AcNone,
+    );
+
+    let socket = ArtNetSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0)))
+        .await
+        .map_err(|e| format!("Failed to create socket: {e}"))?;
+    socket
+        .send_to(&packet, target)
+        .await
+        .map_err(|e| format!("Failed to send ArtAddress: {e}"))?;
+    Ok(())
 }
 
 /// Tauri command: sends ArtDataRequest UNICAST to target device and waits for ArtDataReply.
