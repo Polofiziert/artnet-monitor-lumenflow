@@ -344,6 +344,20 @@ describe("IP cfg (ArtIpProgReply) inline editing", () => {
           dhcp_enabled: false,
         };
       }
+      if (cmd === "get_controllers") {
+        return [
+          {
+            ip: "10.0.0.99",
+            last_seen_at_ms: 1234,
+            talk_to_me: 0x06,
+            diag_priority: 0,
+            target_port_bottom: 0,
+            target_port_top: 32767,
+            esta_man: 0x5379,
+            oem: 0x2269,
+          },
+        ];
+      }
       // DeviceList may call other commands on mount (e.g. get_diag_entries).
       return [];
     });
@@ -368,6 +382,9 @@ describe("IP cfg (ArtIpProgReply) inline editing", () => {
     const [activity] = createSignal<Record<string, PollReplyActivity>>({});
 
     render(() => <DeviceList products={productsSig} pollReplyActivity={activity} />);
+
+    expect(await screen.findByText("Controllers seen (ArtPoll senders)")).toBeTruthy();
+    expect(await screen.findByText("10.0.0.99")).toBeTruthy();
 
     await fireEvent.click(await screen.findByText("Node A Long [1]"));
     await fireEvent.click(await screen.findByText("Read"));

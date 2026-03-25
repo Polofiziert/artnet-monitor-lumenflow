@@ -50,22 +50,17 @@ pub struct ArtNetSocket {
 }
 
 impl ArtNetSocket {
-    /// Creates and binds an Art-Net UDP socket on the given address.
-    ///
-    /// Configures `SO_REUSEADDR` and sets `SO_RCVBUF` to 8 MB to prevent
-    /// kernel-level packet drops during traffic spikes.
-    ///
-    /// # Errors
-    /// Returns `NetworkError` if socket creation, configuration, or binding fails.
-    pub async fn bind(bind_addr: SocketAddr) -> Result<Self, NetworkError> {
+    async fn bind_inner(bind_addr: SocketAddr, enable_broadcast: bool) -> Result<Self, NetworkError> {
         let raw = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
             .map_err(NetworkError::SocketCreate)?;
 
         raw.set_reuse_address(true)
             .map_err(NetworkError::SetReuseAddr)?;
 
-        raw.set_broadcast(true)
-            .map_err(NetworkError::SetBroadcast)?;
+        if enable_broadcast {
+            raw.set_broadcast(true)
+                .map_err(NetworkError::SetBroadcast)?;
+        }
 
         raw.set_recv_buffer_size(DEFAULT_RECV_BUF_SIZE)
             .map_err(|e| NetworkError::SetRecvBuf {
@@ -89,9 +84,55 @@ impl ArtNetSocket {
         tracing::info!(
             addr = %bind_addr,
             recv_buf_bytes = DEFAULT_RECV_BUF_SIZE,
+            broadcast = enable_broadcast,
             "Art-Net socket bound"
         );
 
+        Ok(Self {
+            socket,
+            recv_buf: vec![0u8; 2048],
+        })
+    }
+
+    /// Creates and binds an Art-Net UDP socket on the given address.
+    ///
+    /// Configures `SO_REUSEADDR` and sets `SO_RCVBUF` to 8 MB to prevent
+    /// kernel-level packet drops during traffic spikes.
+    ///
+    /// # Errors
+    /// Returns `NetworkError` if socket creation, configuration, or binding fails.
+    pub async fn bind(bind_addr: SocketAddr) -> Result<Self, NetworkError> {
+        Self::bind_inner(bind_addr, true).await
+    }
+
+    /// Creates and binds a UDP socket intended for unicast management packets.
+    ///
+    /// This intentionally does **not** enable `SO_BROADCAST`, since some environments
+    /// (notably macOS privacy/entitlement configurations) can block such sockets from
+    /// sending unicast, returning "No route to host" before any packet hits the wire.
+    pub async fn bind_unicast_sender(bind_addr: SocketAddr) -> Result<Self, NetworkError> {
+        Self::bind_inner(bind_addr, false).await
+    }
+
+    /// Creates a minimal UDP socket for unicast sending.
+    ///
+    /// Avoids `socket2` configuration entirely to match OS-default behavior. This is used
+    /// as a last-resort fallback for management sends on some macOS setups where a tuned
+    /// socket can return `EHOSTUNREACH` before any packet hits the wire.
+    pub async fn bind_minimal_unicast_sender(bind_addr: SocketAddr) -> Result<Self, NetworkError> {
+        let std_socket = std::net::UdpSocket::bind(bind_addr)
+            .map_err(|e| NetworkError::Bind { addr: bind_addr, source: e })?;
+        std_socket
+            .set_nonblocking(true)
+            .map_err(NetworkError::SocketCreate)?;
+
+        let socket = UdpSocket::from_std(std_socket).map_err(NetworkError::AsyncConvert)?;
+        tracing::info!(
+            addr = %bind_addr,
+            recv_buf_bytes = DEFAULT_RECV_BUF_SIZE,
+            broadcast = false,
+            "Art-Net socket bound (minimal)"
+        );
         Ok(Self {
             socket,
             recv_buf: vec![0u8; 2048],
@@ -191,17 +232,17 @@ impl ArtNetSocket {
     }
 }
 
-/// Builds an 18-byte ArtPoll broadcast packet per Art-Net 4 spec.
+/// Builds an ArtPoll broadcast packet per Art-Net 4 spec (22-byte form).
 ///
 /// The packet solicits `ArtPollReply` responses from all Art-Net nodes
 /// on the network. Flags: 0x06 = TalkToMe (0x02) + Send diagnostics (0x04).
 /// DiagPriority 0x10 = DpLow (request all diagnostic levels).
 ///
 /// `target_top` and `target_bottom` define a port-address range for
-/// targeted polling (Art-Net 4). Set both to `0x0000` for non-targeted
-/// mode (all nodes reply), which is backward-compatible with Art-Net 3.
+/// targeted polling (Art-Net 4). These are encoded as **Hi/Lo bytes**.
+/// Set both to `0x0000` for the legacy non-targeted form.
 ///
-/// # Wire Layout
+/// # Wire Layout (Art-Net 4)
 /// | Offset | Size | Field                  | Value         |
 /// |--------|------|------------------------|---------------|
 /// | 0      | 8    | ID                     | `"Art-Net\0"` |
@@ -209,30 +250,44 @@ impl ArtNetSocket {
 /// | 10     | 1    | ProtVerHi              | `0x00`        |
 /// | 11     | 1    | ProtVerLo              | `0x0e`        |
 /// | 12     | 1    | Flags                  | `0x06`        |
-/// | 13     | 1    | DiagPriority           | `0x10`        |
-/// | 14     | 2    | TargetPortAddressTop   | LE            |
-/// | 16     | 2    | TargetPortAddressBottom| LE            |
-pub fn build_art_poll() -> [u8; 18] {
-    build_art_poll_targeted(0x0000, 0x0000)
+/// | 13     | 1    | DiagPriority           | `0x00` (DpAll)|
+/// | 14     | 2    | TargetPortAddressTop   | Hi/Lo         |
+/// | 16     | 2    | TargetPortAddressBottom| Hi/Lo         |
+/// | 18     | 2    | EstaMan                | Hi/Lo         |
+/// | 20     | 2    | Oem                    | Hi/Lo         |
+pub fn build_art_poll() -> [u8; 22] {
+    // Mirror the most interoperable controller form (as observed in DMX-Workshop):
+    // - TalkToMe: 0x06
+    // - DiagPriority: DpAll (0)
+    // - Target range: 0..32767 (full 15-bit space)
+    build_art_poll_targeted(0x7fff, 0x0000, 0xffff, 0xffff)
 }
 
-/// Builds an 18-byte targeted ArtPoll packet per Art-Net 4 spec.
+/// Builds a targeted ArtPoll packet per Art-Net 4 spec (22-byte form).
 ///
 /// Only nodes with port-addresses in the range `[target_bottom, target_top]`
 /// will reply. Both values are 15-bit port-addresses (Net:SubNet:Universe).
 ///
 /// # Errors
 /// This function is infallible; invalid ranges simply get no replies.
-pub fn build_art_poll_targeted(target_top: u16, target_bottom: u16) -> [u8; 18] {
-    let mut pkt = [0u8; 18];
+pub fn build_art_poll_targeted(
+    target_top: u16,
+    target_bottom: u16,
+    esta_man: u16,
+    oem: u16,
+) -> [u8; 22] {
+    let mut pkt = [0u8; 22];
     pkt[0..8].copy_from_slice(b"Art-Net\0");
     pkt[8..10].copy_from_slice(&0x2000u16.to_le_bytes());
     pkt[10] = 0x00;
     pkt[11] = 0x0e;
     pkt[12] = 0x06; // TalkToMe (0x02) + Send diagnostics (0x04)
-    pkt[13] = 0x10; // DpLow - request all diagnostic levels
-    pkt[14..16].copy_from_slice(&target_top.to_le_bytes());
-    pkt[16..18].copy_from_slice(&target_bottom.to_le_bytes());
+    pkt[13] = 0x00; // DpAll
+    // ArtPoll encodes these as Hi/Lo bytes (big-endian on wire).
+    pkt[14..16].copy_from_slice(&target_top.to_be_bytes());
+    pkt[16..18].copy_from_slice(&target_bottom.to_be_bytes());
+    pkt[18..20].copy_from_slice(&esta_man.to_be_bytes());
+    pkt[20..22].copy_from_slice(&oem.to_be_bytes());
     pkt
 }
 
@@ -281,10 +336,12 @@ mod tests {
         assert_eq!(pkt[10], 0x00);
         assert_eq!(pkt[11], 0x0e);
         assert_eq!(pkt[12], 0x06);
-        assert_eq!(pkt[13], 0x10); // DpLow - request all diagnostic levels
-        assert_eq!(u16::from_le_bytes([pkt[14], pkt[15]]), 0x0000);
-        assert_eq!(u16::from_le_bytes([pkt[16], pkt[17]]), 0x0000);
-        assert_eq!(pkt.len(), 18);
+        assert_eq!(pkt[13], 0x00); // DpAll
+        assert_eq!(u16::from_be_bytes([pkt[14], pkt[15]]), 0x7fff);
+        assert_eq!(u16::from_be_bytes([pkt[16], pkt[17]]), 0x0000);
+        assert_eq!(u16::from_be_bytes([pkt[18], pkt[19]]), 0xffff);
+        assert_eq!(u16::from_be_bytes([pkt[20], pkt[21]]), 0xffff);
+        assert_eq!(pkt.len(), 22);
     }
 
     #[test]
@@ -297,9 +354,13 @@ mod tests {
 
     #[test]
     fn test_build_art_poll_targeted() {
-        let pkt = build_art_poll_targeted(0x7FFF, 0x0100);
-        assert_eq!(u16::from_le_bytes([pkt[14], pkt[15]]), 0x7FFF);
-        assert_eq!(u16::from_le_bytes([pkt[16], pkt[17]]), 0x0100);
-        assert_eq!(pkt.len(), 18);
+        let pkt = build_art_poll_targeted(0x7FFF, 0x0100, 0x5379, 0x2269);
+        assert_eq!(u16::from_be_bytes([pkt[14], pkt[15]]), 0x7FFF);
+        assert_eq!(u16::from_be_bytes([pkt[16], pkt[17]]), 0x0100);
+        assert_eq!(u16::from_be_bytes([pkt[18], pkt[19]]), 0x5379);
+        assert_eq!(u16::from_be_bytes([pkt[20], pkt[21]]), 0x2269);
+        assert_eq!(pkt.len(), 22);
     }
+
+    // Note: full-range is now the default `build_art_poll()`.
 }

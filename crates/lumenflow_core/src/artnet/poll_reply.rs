@@ -4,6 +4,8 @@ use zerocopy::{FromBytes, FromZeroes};
 
 use super::{decode_port_address, ArtNetPacket, ParseError, ART_NET_HEADER};
 
+use std::sync::atomic::{AtomicU16, Ordering};
+
 /// Art-Net `OpPollReply` packet (239 bytes on wire).
 ///
 /// Unlike other Art-Net packets the protocol-version field sits *after* the
@@ -93,9 +95,10 @@ impl ArtPollReplyPacket {
         u16::from_be_bytes(self.oem)
     }
 
-    /// Returns the ESTA manufacturer code from the big-endian `esta_man` field.
+    /// Returns the ESTA manufacturer code from the `EstaManLo`/`EstaManHi` field.
     pub fn esta_man(&self) -> u16 {
-        u16::from_be_bytes(self.esta_man)
+        // ArtPollReply uses EstaManLo / EstaManHi ordering on the wire.
+        u16::from_le_bytes(self.esta_man)
     }
 
     /// Returns the number of ports from the big-endian `num_ports` field.
@@ -176,6 +179,42 @@ pub(super) fn parse_poll_reply(payload: &[u8]) -> Result<ArtNetPacket<'_>, Parse
 
 const ST_CONFIG: u8 = 0x05;
 
+// Art-Net NodeReport has a 4-digit decimal counter prefix ("#0001").
+// Spec expects this to increment for each reported message.
+static NODE_REPORT_COUNTER: AtomicU16 = AtomicU16::new(1);
+
+fn write_node_report_power_on_tests_pass(dst: &mut [u8; 64]) {
+    dst.fill(0);
+
+    // Counter is 0001..9999, wrapping back to 0001.
+    let n = NODE_REPORT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut counter = n % 10_000;
+    if counter == 0 {
+        counter = 1;
+    }
+
+    // Format (spec): "#xxxx [yyyy] zzzz..."
+    // - xxxx = hex status code (Table 3). 0x0001 = RcPowerOk.
+    // - yyyy = decimal counter that increments each ArtPollReply and rolls over at 9999.
+    //
+    // Write manually to avoid allocations.
+    let d0 = ((counter / 1000) % 10) as u8;
+    let d1 = ((counter / 100) % 10) as u8;
+    let d2 = ((counter / 10) % 10) as u8;
+    let d3 = (counter % 10) as u8;
+
+    // "#0001 ["
+    dst[0..7].copy_from_slice(b"#0001 [");
+    dst[7] = b'0' + d0;
+    dst[8] = b'0' + d1;
+    dst[9] = b'0' + d2;
+    dst[10] = b'0' + d3;
+    dst[11] = b']';
+
+    const REST: &[u8] = b" Power On Tests Pass.";
+    dst[12..12 + REST.len()].copy_from_slice(REST);
+}
+
 /// Builds a 239-byte ArtPollReply identifying LumenFlow as an Art-Net controller.
 ///
 /// # Errors
@@ -190,9 +229,20 @@ pub fn build_our_poll_reply(our_ip: std::net::Ipv4Addr, our_mac: [u8; 6]) -> [u8
     pkt[14..16].copy_from_slice(&6454u16.to_le_bytes());
     pkt[16] = 0x00;
     pkt[17] = 0x01;
+
+    // OEM / manufacturer identity.
+    //
+    // We do not currently have a registered Art-Net OEM / ESTA manufacturer code.
+    // Use 0xFFFF for both so tools don't mis-identify us as a specific vendor.
+    pkt[20..22].copy_from_slice(&0xFFFFu16.to_be_bytes()); // OEM
+    pkt[24..26].copy_from_slice(&0xFFFFu16.to_le_bytes()); // ESTA manufacturer (EstaManLo/Hi)
+
     pkt[23] = 0x02; // Status1: RDM capable
     pkt[26..35].copy_from_slice(b"LumenFlow");
     pkt[44..69].copy_from_slice(b"LumenFlow Art-Net Monitor");
+    let mut node_report = [0u8; 64];
+    write_node_report_power_on_tests_pass(&mut node_report);
+    pkt[108..172].copy_from_slice(&node_report);
     pkt[200] = ST_CONFIG;
     pkt[201..207].copy_from_slice(&our_mac);
     pkt[207..211].copy_from_slice(&octets);
@@ -300,7 +350,8 @@ pub fn build_swisson_bind_poll_reply(p: &SwissonBindPollReplyParams) -> [u8; 239
     pkt[20..22].copy_from_slice(&p.oem.to_be_bytes());
     pkt[22] = 0x00;
     pkt[23] = p.status1;
-    pkt[24..26].copy_from_slice(&p.esta_man.to_be_bytes());
+    // ArtPollReply uses EstaManLo / EstaManHi ordering on wire.
+    pkt[24..26].copy_from_slice(&p.esta_man.to_le_bytes());
 
     let short = p.short_name.as_bytes();
     pkt[26..26 + short.len().min(18)].copy_from_slice(&short[..short.len().min(18)]);
@@ -330,6 +381,11 @@ mod tests {
     use super::*;
     use crate::artnet::ArtNetParser;
 
+    fn node_report_str(bytes: &[u8; 64]) -> &str {
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        core::str::from_utf8(&bytes[..end]).unwrap_or("")
+    }
+
     #[test]
     fn test_build_our_poll_reply_round_trip() {
         let ip = std::net::Ipv4Addr::new(10, 0, 0, 42);
@@ -341,6 +397,7 @@ mod tests {
                 assert_eq!(reply.ip(), ip);
                 assert_eq!(reply.short_name_str(), "LumenFlow");
                 assert_eq!(reply.long_name_str(), "LumenFlow Art-Net Monitor");
+                assert!(node_report_str(&reply.node_report).contains("Power On Tests Pass."));
                 assert_eq!(reply.style, ST_CONFIG);
                 assert_eq!(reply.mac, mac);
                 assert_eq!(reply.bind_index, 1);
@@ -348,9 +405,46 @@ mod tests {
                 assert_eq!(reply.num_ports(), 0);
                 assert_eq!(u16::from_le_bytes(reply.port), 6454);
                 assert_eq!(reply.firmware_version(), 0x0001);
+                assert_eq!(reply.oem_code(), 0xFFFF);
+                assert_eq!(reply.esta_man(), 0xFFFF);
             }
             other => panic!("expected PollReply, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_build_our_poll_reply_node_report_counter_increments() {
+        let ip = std::net::Ipv4Addr::new(10, 0, 0, 1);
+        let mac = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
+
+        let pkt1 = build_our_poll_reply(ip, mac);
+        let pkt2 = build_our_poll_reply(ip, mac);
+
+        let r1 = match ArtNetParser::parse(&pkt1) {
+            Ok(ArtNetPacket::PollReply(r)) => r,
+            other => panic!("expected PollReply, got {other:?}"),
+        };
+        let r2 = match ArtNetParser::parse(&pkt2) {
+            Ok(ArtNetPacket::PollReply(r)) => r,
+            other => panic!("expected PollReply, got {other:?}"),
+        };
+
+        let s1 = node_report_str(&r1.node_report);
+        let s2 = node_report_str(&r2.node_report);
+
+        let c1: u16 = s1
+            .split_once('[')
+            .and_then(|(_, rest)| rest.split_once(']'))
+            .and_then(|(digits, _)| digits.parse().ok())
+            .expect("node report must include [dddd] counter");
+        let c2: u16 = s2
+            .split_once('[')
+            .and_then(|(_, rest)| rest.split_once(']'))
+            .and_then(|(digits, _)| digits.parse().ok())
+            .expect("node report must include [dddd] counter");
+
+        let expected = if c1 == 9999 { 1 } else { c1 + 1 };
+        assert_eq!(c2, expected);
     }
 
     #[test]

@@ -6,7 +6,9 @@ mod viewport_culler;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use dashmap::DashMap;
 use dashmap::DashSet;
+use parking_lot::RwLock;
 use tracing_subscriber::EnvFilter;
 use lumenflow_core::engine::DiagBuffer;
 use lumenflow_core::{DeviceRegistry, JitterCollector, SyncDetector, UniverseStore};
@@ -17,7 +19,7 @@ use network_commands::{
     set_network_settings_cmd,
 };
 use viewport_culler::{
-    get_artnet_products, get_available_universes, get_devices, get_diag_entries,
+    get_artnet_products, get_available_universes, get_controllers, get_devices, get_diag_entries,
     request_device_url, send_art_address, send_ip_prog, set_active_universes, start_emit_loop, start_network_listeners,
     AppState,
 };
@@ -32,6 +34,8 @@ fn main() {
         active_ids: Arc::new(DashSet::new()),
         device_registry: Arc::new(DeviceRegistry::new()),
         device_version: Arc::new(AtomicU64::new(0)),
+        controllers_seen: Arc::new(DashMap::new()),
+        listener_tx: Arc::new(RwLock::new(None)),
         sync_detector: Arc::new(SyncDetector::new()),
         diag_buffer: Arc::new(DiagBuffer::new()),
         jitter_collector: Arc::new(JitterCollector::new()),
@@ -47,6 +51,7 @@ fn main() {
             get_available_universes,
             get_devices,
             get_artnet_products,
+            get_controllers,
             get_diag_entries,
             send_ip_prog,
             send_art_address,

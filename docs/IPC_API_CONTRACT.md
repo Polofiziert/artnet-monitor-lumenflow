@@ -51,6 +51,7 @@ This document defines the complete contract between the Tauri/Rust backend and t
 | `get_devices`                | FE → BE   | —                                            | `DeviceInfoDto[]`       | Flat per-bind snapshot (debug/advanced). Prefer `get_artnet_products` for UI.                                                    |
 | `get_artnet_products`        | FE → BE   | —                                            | `ArtNetProductDto[]`    | One entry per physical node (bind IP + MAC); ports flattened across BindIndex. Primary for Devices and Routing.                  |
 | `get_diag_entries`           | FE → BE   | —                                            | `DiagEntryDto[]`        | Snapshot of diagnostic log. Used for initial load; `diag-entry` event for live updates.                                          |
+| `get_controllers`            | FE → BE   | —                                            | `ControllerSeenDto[]`   | List of controllers observed via incoming ArtPoll packets (best-effort; may not be nodes).                                       |
 | `send_ip_prog`               | FE → BE   | `IpProgParams`                               | `IpProgReplyDto`        | Send ArtIpProg unicast to target device. Read-only or programming mode.                                                          |
 | `send_art_address`           | FE → BE   | `ArtAddressParams`                           | `void`                  | Send ArtAddress unicast to program names + per-port In/Out. Verify via subsequent ArtPollReply.                                  |
 | `request_device_url`         | FE → BE   | `{ target_ip, esta_man, oem, request_type }` | `string`                | Fetch product/user guide/support URL via ArtDataRequest. Use `oem` (not `oem_code`) as key; value from `ArtNetProductDto.oem_code` (or `DeviceInfoDto` for flat `get_devices`). |
@@ -339,6 +340,22 @@ interface ArtAddressParams {
 ```
 
 ---
+
+### 5.4b ControllerSeenDto
+
+```typescript
+interface ControllerSeenDto {
+  ip: string;
+  /** Age since last seen (ms). */
+  last_seen_at_ms: number;
+  talk_to_me: number;
+  diag_priority: number;
+  target_port_bottom: number;
+  target_port_top: number;
+  esta_man: number;
+  oem: number;
+}
+```
 
 ### 5.5 Timecode Event Payload
 

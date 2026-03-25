@@ -98,7 +98,7 @@ This happens with the spawn-virtual-network script running.
 
 ### Dashboard
 
-- in the Dashboard on the right the Universe titlebar, when the avg and activ info changes itshifts the whole text behing it. this is irritating.
+- In the Universe Titel Bar in Dashboard and Inspector the Label: avg 123 in the wrong order, it should be 123 avg.
 
 # Release v0.3.0
 
@@ -198,4 +198,12 @@ A message center for important events is missing
   - When there is an error in the timecode packets, the dot gets red.
 - In the Settings, there should be a switch between "Send dignostic" unicast and Broadcast. for the ArtPoll packets from lumenflow
 - In the Devces tab, the read current button needs to show some reactivity, a loading symbol that resolves when the next artPollReply from that node came in and all the date has been updated.
+
+### Settings
+
+- Make it a modal
+- Let LongName be Editable
+- Make better NIC Options
+- Make Jitter and Warning limits variable
+- 
 

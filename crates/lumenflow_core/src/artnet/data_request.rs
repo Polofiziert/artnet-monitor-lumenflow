@@ -63,8 +63,8 @@ impl ArtDataRequestPacket {
 /// The device responds with ArtDataReply (0x2800) containing the URL string.
 ///
 /// # Parameters
-/// - `esta_man`: ESTA manufacturer code from ArtPollReply (big-endian).
-/// - `oem`: OEM code from ArtPollReply (big-endian).
+/// - `esta_man`: ESTA manufacturer code from ArtPollReply (decoded to host-order `u16`).
+/// - `oem`: OEM code from ArtPollReply (decoded to host-order `u16`).
 /// - `request_type`: One of `DR_URL_PRODUCT`, `DR_URL_USER_GUIDE`, `DR_URL_SUPPORT`, etc.
 ///
 /// # Returns

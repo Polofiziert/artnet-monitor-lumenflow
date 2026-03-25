@@ -14,6 +14,11 @@ use lumenflow_core::buffer::UniverseStore;
 use lumenflow_core::device::{ArtNetProduct, DeviceInfo, DeviceRegistry};
 use lumenflow_core::engine::{DiscoveryConfig, DiagBuffer, DiagPriority, JitterCollector, SyncDetector, Staleness};
 use lumenflow_core::network::{derive_cidr_24_from_ip, resolve_interface_for_cidr, ArtNetSocket};
+use parking_lot::RwLock;
+use tauri::State;
+use tokio::sync::{mpsc, oneshot};
+
+use crate::network_commands::NetworkState;
 use lumenflow_core::{epoch_nanos, parse_discovery_targets_from_env, spawn_discovery};
 use tokio_util::sync::CancellationToken;
 use tauri::Emitter;
@@ -31,9 +36,34 @@ pub struct AppState {
     pub active_ids: Arc<DashSet<u16>>,
     pub device_registry: Arc<DeviceRegistry>,
     pub device_version: Arc<AtomicU64>,
+    pub controllers_seen: Arc<dashmap::DashMap<std::net::Ipv4Addr, ControllerSeen>>,
+    pub listener_tx: Arc<RwLock<Option<mpsc::Sender<ListenerCommand>>>>,
     pub sync_detector: Arc<SyncDetector>,
     pub diag_buffer: Arc<DiagBuffer>,
     pub jitter_collector: Arc<JitterCollector>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ControllerSeen {
+    pub last_seen_at: Instant,
+    pub talk_to_me: u8,
+    pub diag_priority: u8,
+    pub target_port_bottom: u16,
+    pub target_port_top: u16,
+    pub esta_man: u16,
+    pub oem: u16,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct ControllerSeenDto {
+    pub ip: String,
+    pub last_seen_at_ms: u64,
+    pub talk_to_me: u8,
+    pub diag_priority: u8,
+    pub target_port_bottom: u16,
+    pub target_port_top: u16,
+    pub esta_man: u16,
+    pub oem: u16,
 }
 
 /// Tauri command: the frontend calls this whenever the visible universe set changes.
@@ -284,6 +314,36 @@ pub fn get_diag_entries(state: tauri::State<'_, AppState>) -> Vec<DiagEntryDto> 
         .collect()
 }
 
+/// Tauri command: returns controllers seen via incoming ArtPoll packets.
+#[tauri::command]
+pub fn get_controllers(state: tauri::State<'_, AppState>) -> Vec<ControllerSeenDto> {
+    let now = Instant::now();
+    let mut out: Vec<ControllerSeenDto> = state
+        .controllers_seen
+        .iter()
+        .map(|kv| {
+            let ip = *kv.key();
+            let c = kv.value();
+            let age_ms = now
+                .duration_since(c.last_seen_at)
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64;
+            ControllerSeenDto {
+                ip: ip.to_string(),
+                last_seen_at_ms: age_ms,
+                talk_to_me: c.talk_to_me,
+                diag_priority: c.diag_priority,
+                target_port_bottom: c.target_port_bottom,
+                target_port_top: c.target_port_top,
+                esta_man: c.esta_man,
+                oem: c.oem,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| a.ip.cmp(&b.ip));
+    out
+}
+
 /// Parameters for the send_ip_prog command.
 #[derive(serde::Deserialize)]
 pub struct IpProgParams {
@@ -342,6 +402,19 @@ pub struct PortUniverseUpdate {
     pub universe: u16,
 }
 
+pub(crate) enum ListenerCommand {
+    SendArtAddress {
+        target: SocketAddr,
+        packet: Vec<u8>,
+        response: oneshot::Sender<Result<(), String>>,
+    },
+    SendIpProg {
+        target: SocketAddr,
+        packet: Vec<u8>,
+        response: oneshot::Sender<Result<IpProgReplyDto, String>>,
+    },
+}
+
 fn parse_optional_ipv4(value: Option<&str>, field_name: &str) -> Result<Option<std::net::Ipv4Addr>, String> {
     match value.map(str::trim).filter(|s| !s.is_empty()) {
         Some(s) => s
@@ -361,7 +434,11 @@ fn parse_optional_ipv4(value: Option<&str>, field_name: &str) -> Result<Option<s
 /// # Errors
 /// Returns error if target_ip is invalid, socket fails, send fails, or no reply within 2s.
 #[tauri::command]
-pub async fn send_ip_prog(params: IpProgParams) -> Result<IpProgReplyDto, String> {
+pub async fn send_ip_prog(
+    params: IpProgParams,
+    _network_state: State<'_, NetworkState>,
+    app_state: State<'_, AppState>,
+) -> Result<IpProgReplyDto, String> {
     let target_ip: std::net::Ipv4Addr = params
         .target_ip
         .parse()
@@ -393,52 +470,28 @@ pub async fn send_ip_prog(params: IpProgParams) -> Result<IpProgReplyDto, String
         gateway: parsed_gateway,
     };
 
-    let packet = build_art_ip_prog(&config);
-
-    let socket = ArtNetSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0)))
-        .await
-        .map_err(|e| format!("Failed to create socket: {e}"))?;
-
-    socket
-        .send_to(&packet, target)
-        .await
-        .map_err(|e| format!("Failed to send ArtIpProg: {e}"))?;
-
-    let mut recv_buf = [0u8; 256];
     let timeout = Duration::from_secs(2);
+    let packet = build_art_ip_prog(&config).to_vec();
+    let (tx, rx) = oneshot::channel::<Result<IpProgReplyDto, String>>();
 
-    let deadline = tokio::time::Instant::now() + timeout;
-    loop {
-        let now = tokio::time::Instant::now();
-        if now >= deadline {
-            return Err("Timeout: no ArtIpProgReply received within 2 seconds".to_string());
-        }
-        let remaining = deadline - now;
+    let listener_tx = app_state
+        .listener_tx
+        .read()
+        .clone()
+        .ok_or("Network listener is not ready yet. Please retry.")?;
+    listener_tx
+        .send(ListenerCommand::SendIpProg {
+            target,
+            packet,
+            response: tx,
+        })
+        .await
+        .map_err(|_| "Network listener command channel is closed".to_string())?;
 
-        let (len, from) = tokio::time::timeout(remaining, socket.inner().recv_from(&mut recv_buf))
-            .await
-            .map_err(|_| "Timeout: no ArtIpProgReply received within 2 seconds")?
-            .map_err(|e| format!("Recv error: {e}"))?;
-
-        if from.ip() != target.ip() {
-            continue;
-        }
-
-        let payload = &recv_buf[..len];
-        match ArtNetParser::parse(payload) {
-            Ok(lumenflow_core::ArtNetPacket::IpProgReply(reply)) => {
-                return Ok(IpProgReplyDto {
-                    ip: reply.ip().to_string(),
-                    subnet_mask: reply.subnet_mask().to_string(),
-                    gateway: reply.gateway().to_string(),
-                    port: reply.port(),
-                    dhcp_enabled: reply.dhcp_enabled(),
-                });
-            }
-            Ok(_) => continue,
-            Err(_) => continue,
-        }
-    }
+    tokio::time::timeout(timeout, rx)
+        .await
+        .map_err(|_| "Timeout: no ArtIpProgReply received within 2 seconds".to_string())?
+        .map_err(|_| "Listener dropped pending ArtIpProg request".to_string())?
 }
 
 fn sanitize_artnet_text(value: Option<&str>, max: usize) -> Option<String> {
@@ -470,7 +523,11 @@ fn sanitize_artnet_text(value: Option<&str>, max: usize) -> Option<String> {
 /// Returns error if target/transport is invalid, no mutable fields were provided,
 /// socket creation fails, or UDP send fails.
 #[tauri::command]
-pub async fn send_art_address(params: ArtAddressParams) -> Result<(), String> {
+pub async fn send_art_address(
+    params: ArtAddressParams,
+    _network_state: State<'_, NetworkState>,
+    app_state: State<'_, AppState>,
+) -> Result<(), String> {
     if params.bind_index == 0 {
         return Err("Invalid bind_index: expected 1..=255".to_string());
     }
@@ -534,13 +591,24 @@ pub async fn send_art_address(params: ArtAddressParams) -> Result<(), String> {
         ArtAddressCommand::AcNone,
     );
 
-    let socket = ArtNetSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0)))
+    let (tx, rx) = oneshot::channel::<Result<(), String>>();
+    let listener_tx = app_state
+        .listener_tx
+        .read()
+        .clone()
+        .ok_or("Network listener is not ready yet. Please retry.")?;
+    listener_tx
+        .send(ListenerCommand::SendArtAddress {
+            target,
+            packet: packet.to_vec(),
+            response: tx,
+        })
         .await
-        .map_err(|e| format!("Failed to create socket: {e}"))?;
-    socket
-        .send_to(&packet, target)
+        .map_err(|_| "Network listener command channel is closed".to_string())?;
+    tokio::time::timeout(Duration::from_secs(2), rx)
         .await
-        .map_err(|e| format!("Failed to send ArtAddress: {e}"))?;
+        .map_err(|_| "Timeout sending ArtAddress via listener".to_string())?
+        .map_err(|_| "Listener dropped pending ArtAddress request".to_string())??;
     Ok(())
 }
 
@@ -656,61 +724,58 @@ pub fn start_emit_loop(app_handle: tauri::AppHandle, state: &AppState) {
 
         loop {
             interval.tick().await;
-
-            if active_ids.is_empty() {
-                continue;
-            }
-
-            let now_nanos = epoch_nanos();
             let count = active_ids.len();
-            let mut dmx_payload = Vec::with_capacity(count * 516);
-            let mut metrics_payload = Vec::with_capacity(5 + count * 9);
+            if count > 0 {
+                let now_nanos = epoch_nanos();
+                let mut dmx_payload = Vec::with_capacity(count * 516);
+                let mut metrics_payload = Vec::with_capacity(5 + count * 9);
 
-            let sync_active = if sync_detector.is_active(now_nanos) {
-                1u8
-            } else {
-                0u8
-            };
-            let sync_source_ip = sync_detector
-                .source_ip()
-                .filter(|_| sync_active != 0)
-                .unwrap_or(0);
-            metrics_payload.push(sync_active);
-            metrics_payload.extend_from_slice(&sync_source_ip.to_le_bytes());
+                let sync_active = if sync_detector.is_active(now_nanos) {
+                    1u8
+                } else {
+                    0u8
+                };
+                let sync_source_ip = sync_detector
+                    .source_ip()
+                    .filter(|_| sync_active != 0)
+                    .unwrap_or(0);
+                metrics_payload.push(sync_active);
+                metrics_payload.extend_from_slice(&sync_source_ip.to_le_bytes());
 
-            for id_ref in active_ids.iter() {
-                let id = *id_ref;
-                if let Some((staleness, source_count, seq_errors, has_nzs)) =
-                    universe_store.slot_metrics(id)
-                {
-                    let dmx_data: &[u8; 512] = if staleness == Staleness::Active
-                        && universe_store.snapshot(id, &mut snapshot_buf)
+                for id_ref in active_ids.iter() {
+                    let id = *id_ref;
+                    if let Some((staleness, source_count, seq_errors, has_nzs)) =
+                        universe_store.slot_metrics(id)
                     {
-                        &snapshot_buf
-                    } else {
-                        &silence_buf
-                    };
-                    dmx_payload.extend_from_slice(&id.to_le_bytes());
-                    dmx_payload.extend_from_slice(&512u16.to_le_bytes());
-                    dmx_payload.extend_from_slice(dmx_data);
-                    let staleness_byte = match staleness {
-                        Staleness::Active => 0,
-                        Staleness::Stale => 1,
-                        Staleness::Disconnected => 2,
-                    };
-                    metrics_payload.extend_from_slice(&id.to_le_bytes());
-                    metrics_payload.push(staleness_byte);
-                    metrics_payload.push(source_count);
-                    metrics_payload.extend_from_slice(&(seq_errors as u32).to_le_bytes());
-                    metrics_payload.push(if has_nzs { 1 } else { 0 });
+                        let dmx_data: &[u8; 512] = if staleness == Staleness::Active
+                            && universe_store.snapshot(id, &mut snapshot_buf)
+                        {
+                            &snapshot_buf
+                        } else {
+                            &silence_buf
+                        };
+                        dmx_payload.extend_from_slice(&id.to_le_bytes());
+                        dmx_payload.extend_from_slice(&512u16.to_le_bytes());
+                        dmx_payload.extend_from_slice(dmx_data);
+                        let staleness_byte = match staleness {
+                            Staleness::Active => 0,
+                            Staleness::Stale => 1,
+                            Staleness::Disconnected => 2,
+                        };
+                        metrics_payload.extend_from_slice(&id.to_le_bytes());
+                        metrics_payload.push(staleness_byte);
+                        metrics_payload.push(source_count);
+                        metrics_payload.extend_from_slice(&(seq_errors as u32).to_le_bytes());
+                        metrics_payload.push(if has_nzs { 1 } else { 0 });
+                    }
                 }
-            }
 
-            if !dmx_payload.is_empty() {
-                let _ = app_handle.emit("dmx-frame", &dmx_payload);
-            }
-            if metrics_payload.len() > 5 {
-                let _ = app_handle.emit("universe-metrics", &metrics_payload);
+                if !dmx_payload.is_empty() {
+                    let _ = app_handle.emit("dmx-frame", &dmx_payload);
+                }
+                if metrics_payload.len() > 5 {
+                    let _ = app_handle.emit("universe-metrics", &metrics_payload);
+                }
             }
 
             // Emit route-info and jitter-samples at ~10 Hz (every 6th tick)
@@ -793,11 +858,13 @@ async fn run_udp_listener(
     bind_addr: std::net::SocketAddr,
     our_ip: Option<std::net::Ipv4Addr>,
     discovery_config: DiscoveryConfig,
+    mut command_rx: mpsc::Receiver<ListenerCommand>,
     cancel: CancellationToken,
 ) {
     let universe_store = state.universe_store.clone();
     let device_registry = state.device_registry.clone();
     let device_version = state.device_version.clone();
+    let controllers_seen = state.controllers_seen.clone();
     let sync_detector = state.sync_detector.clone();
     let diag_buffer = state.diag_buffer.clone();
     let jitter_collector = state.jitter_collector.clone();
@@ -805,6 +872,7 @@ async fn run_udp_listener(
     let broadcast_targets = discovery_config.broadcast_targets(ART_NET_PORT);
     let unicast_targets = discovery_config.unicast_targets.clone();
     let poll_packet = build_art_poll();
+    let mut last_unicast_poll_at: HashMap<std::net::Ipv4Addr, Instant> = HashMap::new();
 
     let mut socket = match lumenflow_core::ArtNetSocket::bind(bind_addr).await {
         Ok(s) => s,
@@ -816,6 +884,8 @@ async fn run_udp_listener(
 
     let mut poll_interval = time::interval(Duration::from_millis(DISCOVERY_POLL_INTERVAL_MS));
     poll_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+    let mut pending_ip_prog: HashMap<std::net::IpAddr, oneshot::Sender<Result<IpProgReplyDto, String>>> =
+        HashMap::new();
 
     tracing::info!(
         addr = %bind_addr,
@@ -875,8 +945,36 @@ async fn run_udp_listener(
         tokio::select! {
             biased;
             _ = cancel.cancelled() => {
+                for (_, tx) in pending_ip_prog.drain() {
+                    let _ = tx.send(Err("Listener cancelled before ArtIpProgReply".to_string()));
+                }
                 tracing::info!("UDP listener cancelled");
                 return;
+            }
+            Some(cmd) = command_rx.recv() => {
+                match cmd {
+                    ListenerCommand::SendArtAddress { target, packet, response } => {
+                        tracing::info!(%target, "Listener send ArtAddress");
+                        let r = socket
+                            .send_to(&packet, target)
+                            .await
+                            .map_err(|e| format!("Failed to send ArtAddress: {e}"));
+                        let _ = response.send(r);
+                    }
+                    ListenerCommand::SendIpProg { target, packet, response } => {
+                        tracing::info!(%target, "Listener send ArtIpProg");
+                        match socket.send_to(&packet, target).await {
+                            Ok(()) => {
+                                if let Some(old) = pending_ip_prog.insert(target.ip(), response) {
+                                    let _ = old.send(Err("Superseded by newer ArtIpProg request".to_string()));
+                                }
+                            }
+                            Err(e) => {
+                                let _ = response.send(Err(format!("Failed to send ArtIpProg: {e}")));
+                            }
+                        }
+                    }
+                }
             }
             result = socket.recv() => {
                 let (data, addr) = match result {
@@ -913,7 +1011,7 @@ async fn run_udp_listener(
                         );
                         jitter_collector.record(epoch_nanos());
                     }
-                    Ok(lumenflow_core::ArtNetPacket::Poll(_)) => {
+                    Ok(lumenflow_core::ArtNetPacket::Poll(poll)) => {
                         let sender_ip = match addr {
                             std::net::SocketAddr::V4(v4) => *v4.ip(),
                             std::net::SocketAddr::V6(_) => {
@@ -921,11 +1019,44 @@ async fn run_udp_listener(
                                 continue;
                             }
                         };
+                        let top = u16::from_be_bytes(poll.target_port_top);
+                        let bottom = u16::from_be_bytes(poll.target_port_bottom);
+                        let esta_man = u16::from_be_bytes(poll.esta_man);
+                        let oem = u16::from_be_bytes(poll.oem);
+                        controllers_seen.insert(
+                            sender_ip,
+                            ControllerSeen {
+                                last_seen_at: Instant::now(),
+                                talk_to_me: poll.flags,
+                                diag_priority: poll.diag_priority,
+                                target_port_bottom: bottom,
+                                target_port_top: top,
+                                esta_man,
+                                oem,
+                            },
+                        );
                         let is_self = our_ip.map(|ip| sender_ip == ip).unwrap_or(false);
                         if is_self {
                             tracing::trace!(from = %addr, "Ignoring ArtPoll from self");
                         } else {
                             tracing::info!(from = %addr, "Received ArtPoll from external controller");
+                            // Some nodes/controllers will poll us (so they see us), but will never reply to our
+                            // broadcast discovery if subnet broadcast targets are disabled/missing. Solicit a
+                            // PollReply directly via a unicast ArtPoll to the sender. Rate-limited per IP.
+                            let now = Instant::now();
+                            let should_unicast_poll = match last_unicast_poll_at.get(&sender_ip) {
+                                Some(last) => now.duration_since(*last) > Duration::from_secs(3),
+                                None => true,
+                            };
+                            if should_unicast_poll {
+                                last_unicast_poll_at.insert(sender_ip, now);
+                                let unicast_target = SocketAddr::from((sender_ip, ART_NET_PORT));
+                                if let Err(e) = socket.send_to(&poll_packet, unicast_target).await {
+                                    tracing::debug!(to = %unicast_target, "Unicast ArtPoll send failed: {e}");
+                                } else {
+                                    tracing::debug!(to = %unicast_target, "Sent unicast ArtPoll to solicit PollReply");
+                                }
+                            }
                             // Use configured our_ip, or derive from sender's subnet (sender-subnet fallback).
                             let ip_to_use = our_ip.or_else(|| {
                                 let cidr = derive_cidr_24_from_ip(sender_ip);
@@ -1043,6 +1174,19 @@ async fn run_udp_listener(
                             }
                         }
                     }
+                    Ok(lumenflow_core::ArtNetPacket::IpProgReply(reply)) => {
+                        if let Some(tx) = pending_ip_prog.remove(&addr.ip()) {
+                            let _ = tx.send(Ok(IpProgReplyDto {
+                                ip: reply.ip().to_string(),
+                                subnet_mask: reply.subnet_mask().to_string(),
+                                gateway: reply.gateway().to_string(),
+                                port: reply.port(),
+                                dhcp_enabled: reply.dhcp_enabled(),
+                            }));
+                        } else {
+                            tracing::debug!(from = %addr, "Received ArtIpProgReply without pending request");
+                        }
+                    }
                     Ok(lumenflow_core::ArtNetPacket::Sync(_)) => {
                         let source_ip = match addr {
                             std::net::SocketAddr::V4(v4) => {
@@ -1122,7 +1266,6 @@ async fn run_udp_listener(
                     Ok(lumenflow_core::ArtNetPacket::Command { .. })
                     | Ok(lumenflow_core::ArtNetPacket::Trigger(_))
                     | Ok(lumenflow_core::ArtNetPacket::IpProg(_))
-                    | Ok(lumenflow_core::ArtNetPacket::IpProgReply(_))
                     | Ok(lumenflow_core::ArtNetPacket::DataRequest(_))
                     | Ok(lumenflow_core::ArtNetPacket::DataReply { .. }) => {
                         tracing::trace!(from = %addr, "Received unimplemented packet type");
@@ -1166,6 +1309,32 @@ async fn run_udp_listener(
     }
 }
 
+#[cfg(test)]
+mod unicast_poll_tests {
+    use super::*;
+
+    #[test]
+    fn unicast_poll_rate_limit_is_three_seconds() {
+        let ip = std::net::Ipv4Addr::new(192, 168, 0, 103);
+        let mut map: HashMap<std::net::Ipv4Addr, Instant> = HashMap::new();
+        let t0 = Instant::now();
+        map.insert(ip, t0);
+        let t1 = t0 + Duration::from_secs(2);
+        let should_send_early = match map.get(&ip) {
+            Some(last) => t1.duration_since(*last) > Duration::from_secs(3),
+            None => true,
+        };
+        assert!(!should_send_early);
+
+        let t2 = t0 + Duration::from_secs(4);
+        let should_send_late = match map.get(&ip) {
+            Some(last) => t2.duration_since(*last) > Duration::from_secs(3),
+            None => true,
+        };
+        assert!(should_send_late);
+    }
+}
+
 /// Spawns the UDP listener loop that receives Art-Net packets and writes
 /// them into the shared `UniverseStore` and `DeviceRegistry`.
 #[allow(dead_code)] // Replaced by start_network_listeners; kept for tests
@@ -1173,6 +1342,7 @@ pub fn start_udp_listener(app_handle: tauri::AppHandle, state: &AppState) {
     let bind_addr = std::net::SocketAddr::from(([0, 0, 0, 0], lumenflow_core::artnet::ART_NET_PORT));
     let cancel = CancellationToken::new();
     let state_clone = state.clone();
+    let (_tx, rx) = mpsc::channel(8);
     tauri::async_runtime::spawn(async move {
         run_udp_listener(
             app_handle,
@@ -1180,6 +1350,7 @@ pub fn start_udp_listener(app_handle: tauri::AppHandle, state: &AppState) {
             bind_addr,
             None,
             DiscoveryConfig::default(),
+            rx,
             cancel,
         )
         .await;
@@ -1213,6 +1384,11 @@ pub fn start_network_listeners(
             let app_handle_clone = app_handle.clone();
             let state_clone = state.clone();
             let discovery_config = network_config.discovery_config.clone();
+            let (listener_tx, listener_rx) = mpsc::channel::<ListenerCommand>(32);
+            {
+                let mut tx_slot = state.listener_tx.write();
+                *tx_slot = Some(listener_tx);
+            }
             let listener_handle = tauri::async_runtime::spawn(async move {
                 run_udp_listener(
                     app_handle_clone,
@@ -1220,16 +1396,23 @@ pub fn start_network_listeners(
                     bind_target.bind_addr,
                     bind_target.our_ip,
                     discovery_config,
+                    listener_rx,
                     cancel_for_listener,
                 )
                 .await;
             });
 
             if config_rx.changed().await.is_err() {
+                let mut tx_slot = state.listener_tx.write();
+                *tx_slot = None;
                 break;
             }
             cancel.cancel();
             let _ = listener_handle.await;
+            {
+                let mut tx_slot = state.listener_tx.write();
+                *tx_slot = None;
+            }
         }
     });
 }
@@ -1382,5 +1565,74 @@ mod tests {
         assert!(!should_emit_poll_reply_bundle(t1, key, &mut state));
         let t2 = t0 + Duration::from_millis(POLL_REPLY_BUNDLE_WINDOW_MS + 5);
         assert!(should_emit_poll_reply_bundle(t2, key, &mut state));
+    }
+
+    #[tokio::test]
+    async fn listener_command_channel_delivers_ip_prog_result() {
+        let (tx, mut rx) = mpsc::channel::<ListenerCommand>(4);
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let target = SocketAddr::from(([192, 168, 0, 103], ART_NET_PORT));
+        let dto = IpProgReplyDto {
+            ip: "192.168.0.103".to_string(),
+            subnet_mask: "255.255.255.0".to_string(),
+            gateway: "192.168.0.1".to_string(),
+            port: 6454,
+            dhcp_enabled: false,
+        };
+
+        let expected_ip = dto.ip.clone();
+        tx.send(ListenerCommand::SendIpProg {
+            target,
+            packet: vec![1, 2, 3],
+            response: resp_tx,
+        })
+        .await
+        .expect("send command");
+
+        if let Some(ListenerCommand::SendIpProg {
+            target: got_target,
+            packet,
+            response,
+        }) = rx.recv().await
+        {
+            assert_eq!(got_target, target);
+            assert_eq!(packet, vec![1, 2, 3]);
+            let _ = response.send(Ok(dto));
+        } else {
+            panic!("expected SendIpProg command");
+        }
+
+        let result = resp_rx.await.expect("oneshot receive").expect("ip prog result");
+        assert_eq!(result.ip, expected_ip);
+    }
+
+    #[tokio::test]
+    async fn listener_command_channel_delivers_art_address_result() {
+        let (tx, mut rx) = mpsc::channel::<ListenerCommand>(4);
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let target = SocketAddr::from(([192, 168, 0, 103], ART_NET_PORT));
+
+        tx.send(ListenerCommand::SendArtAddress {
+            target,
+            packet: vec![9, 9],
+            response: resp_tx,
+        })
+        .await
+        .expect("send command");
+
+        if let Some(ListenerCommand::SendArtAddress {
+            target: got_target,
+            packet,
+            response,
+        }) = rx.recv().await
+        {
+            assert_eq!(got_target, target);
+            assert_eq!(packet, vec![9, 9]);
+            let _ = response.send(Ok(()));
+        } else {
+            panic!("expected SendArtAddress command");
+        }
+
+        resp_rx.await.expect("oneshot receive").expect("art address result");
     }
 }

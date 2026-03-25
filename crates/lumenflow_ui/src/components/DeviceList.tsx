@@ -68,6 +68,18 @@ interface DeviceListProps {
   onReadCurrent?: () => Promise<void> | void;
 }
 
+type ControllerSeenDto = {
+  ip: string;
+  /** Age since last seen (ms). */
+  last_seen_at_ms: number;
+  talk_to_me: number;
+  diag_priority: number;
+  target_port_bottom: number;
+  target_port_top: number;
+  esta_man: number;
+  oem: number;
+};
+
 interface PollReplyPulseDotProps {
   activity?: PollReplyActivity | undefined;
   tooltip: string;
@@ -187,7 +199,27 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   const [ipProgByProductId, setIpProgByProductId] = createSignal<
     Record<string, { reply: IpProgReplyDto; receivedAtMs: number }>
   >({});
+  const [controllersSeen, setControllersSeen] = createSignal<ControllerSeenDto[]>([]);
   const log = useDiagLog();
+
+  createEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const next = await invoke<ControllerSeenDto[]>("get_controllers");
+        if (cancelled) return;
+        setControllersSeen(Array.isArray(next) ? next : []);
+      } catch {
+        // Controllers list is best-effort.
+      }
+    };
+    void refresh();
+    const t = setInterval(() => void refresh(), 2000);
+    onCleanup(() => {
+      cancelled = true;
+      clearInterval(t);
+    });
+  });
 
   /** Merge backend products with manual-only entries (by IP). */
   const mergedProducts = createMemo(() => {
@@ -253,7 +285,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     selectedDevice() ? (pollActivityFor(selectedDevice()!.product_id)?.bundleCount ?? 0) : 0;
 
   const beginEdit = (key: string, currentValue: string) => {
-    setFieldErrors((prev) => ({ ...prev, [key]: "" }));
+    // Clear stale errors when starting a new edit, otherwise a prior failure (e.g. ArtIpProg)
+    // can appear to be caused by the current action.
+    setFieldErrors({});
     setEditingIp(false);
     setEditingLongName(false);
     setEditingIpProgField(null);
@@ -291,11 +325,16 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     setFieldLoading((prev) => ({ ...prev, [key]: loading }));
   };
 
-  const fieldSpinner = (key: string) => (
+  const fieldSpinner = (key: string, opts?: { inline?: boolean }) => (
     <Show when={fieldLoading()[key]}>
       <span
-        class="ml-1 inline-block h-3 w-3 animate-spin rounded-full border border-teal/50 border-t-teal align-middle"
+        class={
+          opts?.inline
+            ? "inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border border-teal/50 border-t-teal align-middle"
+            : "ml-1 inline-block h-3 w-3 animate-spin rounded-full border border-teal/50 border-t-teal align-middle"
+        }
         title="Sending update…"
+        aria-hidden="true"
       />
     </Show>
   );
@@ -812,6 +851,23 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.9fr)]">
         <div class="space-y-3">
+          <Show when={controllersSeen().length > 0}>
+            <div class="rounded-md border border-edge bg-obsidian p-2">
+              <div class="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted">
+                Controllers seen (ArtPoll senders)
+              </div>
+              <div class="space-y-1">
+                <For each={controllersSeen()}>
+                  {(c) => (
+                    <div class="flex items-center justify-between gap-2 text-[11px] font-mono">
+                      <span class="text-secondary">{c.ip}</span>
+                      <span class="text-muted">{Math.round(c.last_seen_at_ms / 100) / 10}s ago</span>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
           <Show when={filteredDevices().length > 0} fallback={<div class="flex h-24 items-center justify-center text-xs text-muted">No Art-Net devices discovered</div>}>
             <Show when={connectedDevices().length > 0}>
               <div class="text-[10px] font-medium uppercase tracking-wider text-muted">Connected</div>
@@ -1130,36 +1186,48 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                       </Show>
                     </div>
                     <span class="text-muted">Long Name</span>
-                    <div class="min-w-0">
-                      <Show
-                        when={editingLongName()}
-                        fallback={
-                          <button
-                            type="button"
-                            class="w-full truncate text-left text-secondary hover:text-teal"
-                            title={device().long_name}
-                            onDblClick={() => {
-                              beginEdit("long_name", device().long_name);
-                              setEditingLongName(true);
-                            }}
+                    <div
+                      class="min-w-0"
+                      aria-busy={fieldLoading()["long_name"] ? "true" : "false"}
+                    >
+                      <div class="flex items-start gap-2">
+                        <div class="min-w-0 flex-1">
+                          <Show
+                            when={editingLongName()}
+                            fallback={
+                              <button
+                                type="button"
+                                class="w-full truncate text-left text-secondary hover:text-teal"
+                                title={device().long_name}
+                                onDblClick={() => {
+                                  beginEdit("long_name", device().long_name);
+                                  setEditingLongName(true);
+                                }}
+                              >
+                                {device().long_name}
+                              </button>
+                            }
                           >
-                            {device().long_name}
-                          </button>
-                        }
-                      >
-                        <input
-                          autofocus
-                          value={editingValue()}
-                          onInput={(e) => setEditingValue(e.currentTarget.value)}
-                          onBlur={() => setEditingLongName(false)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") setEditingLongName(false);
-                            if (e.key === "Enter") void submitLongNameEdit();
-                          }}
-                          class="w-full rounded border border-edge-active bg-surface px-2 py-1 text-[11px] text-primary focus:border-teal/40 focus:outline-none"
-                        />
-                      </Show>
-                      <div class="text-[10px] text-teal">{fieldSpinner("long_name")}</div>
+                            <input
+                              autofocus
+                              value={editingValue()}
+                              onInput={(e) => setEditingValue(e.currentTarget.value)}
+                              onBlur={() => setEditingLongName(false)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") setEditingLongName(false);
+                                if (e.key === "Enter") void submitLongNameEdit();
+                              }}
+                              class="w-full rounded border border-edge-active bg-surface px-2 py-1 text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                            />
+                          </Show>
+                        </div>
+                        <div class="flex shrink-0 items-center gap-1.5 pt-0.5 text-teal">
+                          {fieldSpinner("long_name", { inline: true })}
+                          <Show when={fieldLoading()["long_name"]}>
+                            <span class="text-[10px] text-muted">Sending…</span>
+                          </Show>
+                        </div>
+                      </div>
                       <Show when={pendingEdits()["long_name"]?.warning}>
                         <div class="mt-1 text-[10px] text-amber">{pendingEdits()["long_name"]?.warning}</div>
                       </Show>
@@ -1228,39 +1296,54 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                             {(p) => (
                               <tr class="border-b border-edge/40">
                                 <td class="px-2 py-1 font-mono text-secondary">{p().bind_index}</td>
-                                <td class="px-2 py-1 text-primary">
-                                  <Show
-                                    when={editingPortKey() === portFieldKey(p().bind_index, p().slot)}
-                                    fallback={
-                                      <button
-                                        type="button"
-                                        class="w-full truncate text-left text-primary hover:text-teal"
-                                        title="Double-click to edit port name"
-                                        onDblClick={() => {
-                                          beginEdit(portFieldKey(p().bind_index, p().slot), p().label);
-                                          setEditingPortKey(portFieldKey(p().bind_index, p().slot));
-                                        }}
-                                      >
-                                        {p().label}
-                                      </button>
-                                    }
-                                  >
-                                    <input
-                                      autofocus
-                                      maxlength={17}
-                                      value={editingValue()}
-                                      onInput={(e) => setEditingValue(e.currentTarget.value)}
-                                      onBlur={() => setEditingPortKey(null)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape") setEditingPortKey(null);
-                                        if (e.key === "Enter") {
-                                          void submitPortNameEdit(p().bind_index, p().slot, p().label);
+                                <td
+                                  class="px-2 py-1 text-primary"
+                                  aria-busy={
+                                    fieldLoading()[portFieldKey(p().bind_index, p().slot)]
+                                      ? "true"
+                                      : "false"
+                                  }
+                                >
+                                  <div class="flex items-start gap-1.5">
+                                    <div class="min-w-0 flex-1">
+                                      <Show
+                                        when={editingPortKey() === portFieldKey(p().bind_index, p().slot)}
+                                        fallback={
+                                          <button
+                                            type="button"
+                                            class="w-full truncate text-left text-primary hover:text-teal"
+                                            title="Double-click to edit port name"
+                                            onDblClick={() => {
+                                              beginEdit(portFieldKey(p().bind_index, p().slot), p().label);
+                                              setEditingPortKey(portFieldKey(p().bind_index, p().slot));
+                                            }}
+                                          >
+                                            {p().label}
+                                          </button>
                                         }
-                                      }}
-                                      class="w-full rounded border border-edge-active bg-surface px-2 py-1 text-[11px] text-primary focus:border-teal/40 focus:outline-none"
-                                    />
-                                  </Show>
-                                  <div class="text-[10px] text-teal">{fieldSpinner(portFieldKey(p().bind_index, p().slot))}</div>
+                                      >
+                                        <input
+                                          autofocus
+                                          maxlength={17}
+                                          value={editingValue()}
+                                          onInput={(e) => setEditingValue(e.currentTarget.value)}
+                                          onBlur={() => setEditingPortKey(null)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Escape") setEditingPortKey(null);
+                                            if (e.key === "Enter") {
+                                              void submitPortNameEdit(p().bind_index, p().slot, p().label);
+                                            }
+                                          }}
+                                          class="w-full rounded border border-edge-active bg-surface px-2 py-1 text-[11px] text-primary focus:border-teal/40 focus:outline-none"
+                                        />
+                                      </Show>
+                                    </div>
+                                    <div class="flex shrink-0 items-center pt-0.5 text-teal">
+                                      {fieldSpinner(portFieldKey(p().bind_index, p().slot), {
+                                        inline: true,
+                                      })}
+                                    </div>
+                                  </div>
                                   <Show when={pendingEdits()[portFieldKey(p().bind_index, p().slot)]?.warning}>
                                     <div class="mt-1 text-[10px] text-amber">{pendingEdits()[portFieldKey(p().bind_index, p().slot)]?.warning}</div>
                                   </Show>

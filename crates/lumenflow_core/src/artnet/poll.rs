@@ -4,12 +4,12 @@ use zerocopy::{FromBytes, FromZeroes};
 
 use super::{ArtNetPacket, ParseError};
 
-/// Minimum ArtPoll length per Art-Net 4 (bytes 14–17 are optional targeted range).
+/// Minimum ArtPoll length per Art-Net 4.
 pub const ART_POLL_MIN_LEN: usize = 14;
-/// Full ArtPoll length when targeted port range is included.
+/// Full ArtPoll length when extended fields are included.
 pub const ART_POLL_FULL_LEN: usize = core::mem::size_of::<ArtPollPacket>();
 
-/// Art-Net `OpPoll` packet (18 bytes full; 14 bytes minimum on wire).
+/// Art-Net `OpPoll` packet (22 bytes full; 14 bytes minimum on wire).
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes)]
 pub struct ArtPollPacket {
@@ -19,14 +19,20 @@ pub struct ArtPollPacket {
     pub proto_ver_lo: u8,
     pub flags: u8,
     pub diag_priority: u8,
+    /// Top of the targeted port-address range (Hi, Lo). Valid when Flags bit 5 is set.
     pub target_port_top: [u8; 2],
+    /// Bottom of the targeted port-address range (Hi, Lo). Valid when Flags bit 5 is set.
     pub target_port_bottom: [u8; 2],
+    /// ESTA manufacturer code (Hi, Lo).
+    pub esta_man: [u8; 2],
+    /// OEM code (Hi, Lo).
+    pub oem: [u8; 2],
 }
 
 /// Parses a raw UDP payload as an ArtPoll (OpCode 0x2000) packet.
 ///
-/// Per Art-Net 4 spec, ArtPoll may be 14 bytes (without targeted port range) or 18 bytes.
-/// Short packets are zero-padded to 18 bytes so the result is always a full `ArtPollPacket`
+/// Per Art-Net 4 spec, ArtPoll may be 14 bytes (legacy) or larger (fields added over time).
+/// Short packets are zero-padded to the full packet size so the result is always a full `ArtPollPacket`
 /// (target fields 0 when omitted). For 14–17 byte packets we use a heap buffer so the
 /// returned reference is valid (one small allocation per minimal ArtPoll; discovery traffic
 /// is low frequency).
