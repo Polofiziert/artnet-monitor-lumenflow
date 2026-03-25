@@ -58,6 +58,12 @@ Have a nice day :D
   -> what show the charts  
   -> how works the routing matrix  
   -> ...
+- In the Devices Tab, Changing chageable informations like IP, Long-Name, Port-Name,... Should behave like a form not a modal.
+  - with a double click the displayed text should become editable. When pressing enter the value is sent to the Device. For relevant information a warning is shown, espacially for IP and dhcp mode. (everything that can disconnect the device from network and make recovery challenging on site behind stage with time Pressure)
+  - the value of the field should allways only display the value of the last ArtPollReply. 
+    - When, after editing in ui and sending the ArtAddress packet for changing to new value, the value of the next ArtPollReply doesnt has changend, only a warning like in an registration form should be shown near the field in the device tab.
+  - this is the same for all datamodles of the device, incoming artPollReply data overseeds the programmed data. when artPollReply data doenst change, this is an error on the device side and its state doesnt change. so we need to reflect that and or data modle of the device stays true to device state.
+    - for this purpose there should stay a "Read-Current" button that reloads all device related data from network. its a redundant thing because lumenflow shouldnt get out of sync with real data but you never know. better save then sorry.
 
 #### Needs Testing / Observation
 
@@ -67,29 +73,6 @@ This happens with the spawn-virtual-network script running.
 ### To be Implemented
 
 #### Devices Tab
-
-- In the Devices Tab, Changing chageable informations like IP, Long-Name, Port-Name,... Should behave like a form not a modal.
-  - with a double click the displayed text should become editable. When pressing enter the value is sent to the Device. For relevant information a warning is shown, espacially for IP and dhcp mode. (everything that can disconnect the device from network and make recovery challenging on site behind stage with time Pressure)
-  - the value of the field should allways only display the value of the last ArtPollReply. 
-    - When, after editing in ui and sending the ArtAddress packet for changing to new value, the value of the next ArtPollReply doesnt has changend, only a warning like in an registration form should be shown near the field in the device tab.
-  - this is the same for all datamodles of the device, incoming artPollReply data overseeds the programmed data. when artPollReply data doenst change, this is an error on the device side and its state doesnt change. so we need to reflect that and or data modle of the device stays true to device state.
-    - for this purpose there should stay a "Read-Current" button that reloads all device related data from network. its a redundant thing because lumenflow shouldnt get out of sync with real data but you never know. better save then sorry.
-- in the Devices tap, the listed devices load to long, this is irritatian on the user. 
-- In the devices tap, there should be LED related Buttons. Once for all devices at once, one for each device seperatly in the device card.
-  - a "identify" toggle button should be shown.
-    - this button tells with ArtAddress command AcLedLocate that the LEDS of the devices shoud blink.
-    - it togles between AcLedLocate and the other Normal state (either AcLedMute or AcLedNormal) set by the Mute LED button
-  - a "Mute LED" button should be shown.
-    - this button tells with ArtAddress command AcLedMute that the LEDS of the devices shoud be turned off.
-    - it togles between AcLedMute and the other Normal state (either AcLedMute or AcLedNormal) set by the Identify button.
-  - The buttons for all devices at once are also toggls and respect the indivduls LED settings. meaning when two devices are LED-Muted and One is LED-Normal, the All-devices-identify toggle sets the LED-Identify for all devices on activation, and rests to riginal state on deactivation. so all three devices LED-Identify, and then again two are LED-Muted and one is LED-Normal.
-  - the buttons only show toggle effects when the artPollReply of the device show that the ArtAddress packet from us was read. when it doesnt, a small warning should inform the user that we tryed but the devices doesnt wanted.
-  - this is the same for all datamodles of the device, incoming artPollReply data overseeds the programmed data. when artPollReply data doenst change, this is an error on the device side and its state doesnt change. so we need to reflect that and or data modle of the device stays true to device state.
-- In the Protocol, core layer, the NodeReport of an ArtPollReply Packet doesnt get rendered properly. 
-  - for every new art pollReply from an node the text should update in the Devices tab, so in the "Node Report#0001 [0120] Power on tests successful" the counter goes up.
-- A button for OpTimeSync 0x9800 would be nice so we can sync the time with the click of a button.
-  - mayby one button for that in the devices tap
-  - mayby one button integratted in the system clock in the top bar of lumenflow
 
 ### Inspector
 
@@ -198,6 +181,27 @@ A message center for important events is missing
   - When there is an error in the timecode packets, the dot gets red.
 - In the Settings, there should be a switch between "Send dignostic" unicast and Broadcast. for the ArtPoll packets from lumenflow
 - In the Devces tab, the read current button needs to show some reactivity, a loading symbol that resolves when the next artPollReply from that node came in and all the date has been updated.
+
+### Devices tab
+
+- in the Devices tap, the listed devices load to long, this is irritatian on the user. 
+- In the devices tap, there should be LED related Buttons. Once for all devices at once, one for each device seperatly in the device card.
+  - a "identify" toggle button should be shown.
+    - this button tells with ArtAddress command AcLedLocate that the LEDS of the devices shoud blink.
+    - it togles between AcLedLocate and the other Normal state (either AcLedMute or AcLedNormal) set by the Mute LED button
+  - a "Mute LED" button should be shown.
+    - this button tells with ArtAddress command AcLedMute that the LEDS of the devices shoud be turned off.
+    - it togles between AcLedMute and the other Normal state (either AcLedMute or AcLedNormal) set by the Identify button.
+  - The buttons for all devices at once are also toggls and respect the indivduls LED settings. meaning when two devices are LED-Muted and One is LED-Normal, the All-devices-identify toggle sets the LED-Identify for all devices on activation, and rests to riginal state on deactivation. so all three devices LED-Identify, and then again two are LED-Muted and one is LED-Normal.
+  - the buttons only show toggle effects when the artPollReply of the device show that the ArtAddress packet from us was read. when it doesnt, a small warning should inform the user that we tryed but the devices doesnt wanted.
+  - this is the same for all datamodles of the device, incoming artPollReply data overseeds the programmed data. when artPollReply data doenst change, this is an error on the device side and its state doesnt change. so we need to reflect that and or data modle of the device stays true to device state.
+- In the Protocol, core layer, the NodeReport of an ArtPollReply Packet doesnt get rendered properly. 
+  - for every new art pollReply from an node the text should update in the Devices tab, so in the "Node Report#0001 [0120] Power on tests successful" the counter goes up.
+- A button for OpTimeSync 0x9800 would be nice so we can sync the time with the click of a button.
+  - mayby one button for that in the devices tap
+  - mayby one button integratted in the system clock in the top bar of lumenflow
+
+
 
 ### Settings
 
