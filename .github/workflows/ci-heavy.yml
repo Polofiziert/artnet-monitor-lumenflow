@@ -91,7 +91,7 @@ jobs:
         run: python3 scripts/create-malformed-negative-pcap.py
 
       - name: Run Wireshark compliance test (requires sudo capture)
-        run: sudo ./scripts/wireshark-compliance-test.sh
+        run: ./scripts/wireshark-compliance-test.sh
 
   benchmark:
     name: Performance Benchmarks

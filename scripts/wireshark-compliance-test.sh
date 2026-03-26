@@ -39,8 +39,12 @@ echo "  Interface: $IFACE"
 echo "  Output: $PCAP_FILE"
 echo ""
 
-# Start tcpdump in background
-tcpdump -i "$IFACE" -s 0 -w "$PCAP_FILE" udp port 6454 &
+# Start tcpdump in background. Prefer non-root execution, but auto-elevate on CI.
+TCPDUMP_CMD=(tcpdump)
+if [ "$(id -u)" -ne 0 ] && command -v sudo &>/dev/null; then
+    TCPDUMP_CMD=(sudo tcpdump)
+fi
+"${TCPDUMP_CMD[@]}" -i "$IFACE" -s 0 -w "$PCAP_FILE" udp port 6454 &
 TCPDUMP_PID=$!
 
 # Give tcpdump time to start
