@@ -48,8 +48,7 @@ pub async fn run(universe_filter: Option<u16>, json: bool) -> Result<()> {
 fn print_readable(packet: &ArtNetPacket<'_>, addr: SocketAddr) {
     match packet {
         ArtNetPacket::Dmx { header, dmx_data } => {
-            let preview: Vec<String> =
-                dmx_data.iter().take(16).map(|v| format!("{v:3}")).collect();
+            let preview: Vec<String> = dmx_data.iter().take(16).map(|v| format!("{v:3}")).collect();
             println!(
                 "[DMX]      {addr:<21} | uni {uni:>5} | {ch:>3} ch | [{preview}]",
                 uni = header.port_address(),

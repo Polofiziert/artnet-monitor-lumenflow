@@ -151,7 +151,9 @@ export interface JitterChartPalette {
   meanLine: string;
 }
 
-export function getJitterChartPalette(resolved: ResolvedTheme): JitterChartPalette {
+export function getJitterChartPalette(
+  resolved: ResolvedTheme
+): JitterChartPalette {
   if (resolved === "dark") {
     return {
       label: "#A3A3A3",
@@ -183,7 +185,9 @@ export interface NetworkChartPalette {
   legend: readonly string[];
 }
 
-export function getNetworkChartPalette(resolved: ResolvedTheme): NetworkChartPalette {
+export function getNetworkChartPalette(
+  resolved: ResolvedTheme
+): NetworkChartPalette {
   if (resolved === "dark") {
     return {
       label: "#A3A3A3",

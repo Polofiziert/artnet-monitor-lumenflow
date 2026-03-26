@@ -66,12 +66,7 @@ fn get_pattern(name: &str) -> Result<PatternFn> {
 ///
 /// Binds to an ephemeral port and sends to the target (e.g. 127.0.0.1:6454 for
 /// loopback, or 255.255.255.255:6454 for broadcast).
-pub async fn run(
-    universes: u16,
-    rate: u32,
-    target: &str,
-    pattern_name: &str,
-) -> Result<()> {
+pub async fn run(universes: u16, rate: u32, target: &str, pattern_name: &str) -> Result<()> {
     let pattern = get_pattern(pattern_name)?;
 
     let target_addr = super::resolve::resolve_target(target, ART_NET_PORT).await?;

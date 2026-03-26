@@ -9,25 +9,25 @@ The native OS menu provides **View**, **Help**, and related actions. On macOS it
 
 ## View
 
-| Item | ID | Action |
-|------|-----|--------|
-| **Dashboard** | `view-dashboard` | `setActiveView("dashboard")` — accelerator `Cmd/Ctrl+1` |
-| **Inspector** | `view-inspector` | `setActiveView("inspector")` — `Cmd/Ctrl+2` |
-| **Routing Matrix** | `view-routing` | `setActiveView("routing")` — `Cmd/Ctrl+3` |
-| **Devices** | `view-devices` | `setActiveView("devices")` — `Cmd/Ctrl+4` |
-| _(separator)_ | — | — |
-| **Settings…** | `view-settings` | Opens Settings panel — `Cmd/Ctrl+,` |
+| Item               | ID               | Action                                                  |
+| ------------------ | ---------------- | ------------------------------------------------------- |
+| **Dashboard**      | `view-dashboard` | `setActiveView("dashboard")` — accelerator `Cmd/Ctrl+1` |
+| **Inspector**      | `view-inspector` | `setActiveView("inspector")` — `Cmd/Ctrl+2`             |
+| **Routing Matrix** | `view-routing`   | `setActiveView("routing")` — `Cmd/Ctrl+3`               |
+| **Devices**        | `view-devices`   | `setActiveView("devices")` — `Cmd/Ctrl+4`               |
+| _(separator)_      | —                | —                                                       |
+| **Settings…**      | `view-settings`  | Opens Settings panel — `Cmd/Ctrl+,`                     |
 
 ## Help
 
-| Item | ID | Action |
-|------|-----|--------|
-| **LumenFlow Help** | `lumenflow-help` | In-app help panel, **Features** section (`help` / `overview`) |
-| **Search** | `help-search` | Focuses header search (`#lf-search`) — `Cmd/Ctrl+K` (same as in-app shortcut) |
-| **User Manual…** | `manual` | Help panel, **User manual** section (`help` / `manual`) |
-| **Art-Net 4 Specification…** | `artnet-spec` | Opens official spec URL in default browser (`shell` `open`) |
-| _(separator)_ | — | — |
-| **About LumenFlow** | `about` | Help panel, **About** section (`help` / `about`) |
+| Item                         | ID               | Action                                                                        |
+| ---------------------------- | ---------------- | ----------------------------------------------------------------------------- |
+| **LumenFlow Help**           | `lumenflow-help` | In-app help panel, **Features** section (`help` / `overview`)                 |
+| **Search**                   | `help-search`    | Focuses header search (`#lf-search`) — `Cmd/Ctrl+K` (same as in-app shortcut) |
+| **User Manual…**             | `manual`         | Help panel, **User manual** section (`help` / `manual`)                       |
+| **Art-Net 4 Specification…** | `artnet-spec`    | Opens official spec URL in default browser (`shell` `open`)                   |
+| _(separator)_                | —                | —                                                                             |
+| **About LumenFlow**          | `about`          | Help panel, **About** section (`help` / `about`)                              |
 
 On macOS, the Help submenu is set as the app Help menu (`setAsHelpMenuForNSApp`) so the OS can add its search field.
 

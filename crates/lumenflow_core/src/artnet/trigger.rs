@@ -5,7 +5,7 @@
 
 use zerocopy::{FromBytes, FromZeroes};
 
-use super::{ParseError, ART_NET_HEADER, ART_NET_PROTOCOL_VERSION, OpCode};
+use super::{OpCode, ParseError, ART_NET_HEADER, ART_NET_PROTOCOL_VERSION};
 
 /// Key type for ArtTrigger.
 #[repr(u8)]
@@ -112,7 +112,11 @@ pub(super) fn parse_trigger(payload: &[u8]) -> Result<&ArtTriggerPacket, ParseEr
 /// Wire format: Header(12) + Filler(2) + OEM(2 BE) + Key(1) + SubKey(1) + Data(512).
 /// Use `oem: ART_TRIGGER_OEM_UNIVERSAL` for universal triggers.
 /// Data payload is zero-padded (Key 0-3: payload not used per spec).
-pub fn build_art_trigger(oem: u16, key: ArtTriggerKey, sub_key: u8) -> [u8; ART_TRIGGER_PACKET_SIZE] {
+pub fn build_art_trigger(
+    oem: u16,
+    key: ArtTriggerKey,
+    sub_key: u8,
+) -> [u8; ART_TRIGGER_PACKET_SIZE] {
     let mut pkt = [0u8; ART_TRIGGER_PACKET_SIZE];
     pkt[0..8].copy_from_slice(ART_NET_HEADER.as_slice());
     pkt[8..10].copy_from_slice(&(OpCode::Trigger as u16).to_le_bytes());

@@ -54,7 +54,16 @@ fn bench_universe_store_update(c: &mut Criterion) {
 
     group.throughput(Throughput::Elements(1));
     group.bench_function("existing_universe_500_warm", |b| {
-        b.iter(|| store.update(black_box(42), black_box(&data), black_box(1), 0x0A000001, 0, false))
+        b.iter(|| {
+            store.update(
+                black_box(42),
+                black_box(&data),
+                black_box(1),
+                0x0A000001,
+                0,
+                false,
+            )
+        })
     });
     group.finish();
 }

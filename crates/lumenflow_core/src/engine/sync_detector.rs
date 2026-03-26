@@ -44,9 +44,13 @@ impl SyncDetector {
     /// Returns `false` if no ArtSync has ever been received, or if the
     /// most recent one is older than the 4-second timeout.
     pub fn is_active(&self, now_nanos: u64) -> bool {
-        if !self.active.load(Ordering::Acquire) { return false; }
+        if !self.active.load(Ordering::Acquire) {
+            return false;
+        }
         let last = self.last_seen_nanos.load(Ordering::Acquire);
-        if last == 0 { return false; }
+        if last == 0 {
+            return false;
+        }
         now_nanos.saturating_sub(last) < SYNC_TIMEOUT_NANOS
     }
 
@@ -57,7 +61,11 @@ impl SyncDetector {
     /// to check whether sync mode is currently in effect.
     pub fn source_ip(&self) -> Option<u32> {
         let ip = self.source_ip.load(Ordering::Acquire);
-        if ip == 0 { None } else { Some(ip) }
+        if ip == 0 {
+            None
+        } else {
+            Some(ip)
+        }
     }
 
     /// Returns the epoch-nanos timestamp of the last received ArtSync.
@@ -68,7 +76,9 @@ impl SyncDetector {
 }
 
 impl Default for SyncDetector {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -78,34 +88,40 @@ mod tests {
     const CTRL_IP_2: u32 = 0x0A0000C8;
     const T0: u64 = 1_000_000_000_000;
 
-    #[test] fn no_sync_received_is_inactive() {
+    #[test]
+    fn no_sync_received_is_inactive() {
         let sd = SyncDetector::new();
         assert!(!sd.is_active(T0));
         assert_eq!(sd.source_ip(), None);
         assert_eq!(sd.last_seen_nanos(), 0);
     }
-    #[test] fn sync_received_becomes_active() {
+    #[test]
+    fn sync_received_becomes_active() {
         let sd = SyncDetector::new();
         sd.on_sync(CTRL_IP, T0);
         assert!(sd.is_active(T0 + 1_000));
         assert_eq!(sd.source_ip(), Some(CTRL_IP));
     }
-    #[test] fn sync_active_at_3_9_seconds() {
+    #[test]
+    fn sync_active_at_3_9_seconds() {
         let sd = SyncDetector::new();
         sd.on_sync(CTRL_IP, T0);
         assert!(sd.is_active(T0 + 3_900_000_000));
     }
-    #[test] fn sync_inactive_at_4_1_seconds() {
+    #[test]
+    fn sync_inactive_at_4_1_seconds() {
         let sd = SyncDetector::new();
         sd.on_sync(CTRL_IP, T0);
         assert!(!sd.is_active(T0 + 4_100_000_000));
     }
-    #[test] fn sync_inactive_at_exact_boundary() {
+    #[test]
+    fn sync_inactive_at_exact_boundary() {
         let sd = SyncDetector::new();
         sd.on_sync(CTRL_IP, T0);
         assert!(!sd.is_active(T0 + SYNC_TIMEOUT_NANOS));
     }
-    #[test] fn multiple_syncs_same_ip() {
+    #[test]
+    fn multiple_syncs_same_ip() {
         let sd = SyncDetector::new();
         sd.on_sync(CTRL_IP, T0);
         sd.on_sync(CTRL_IP, T0 + 1_000_000_000);
@@ -114,21 +130,24 @@ mod tests {
         assert!(sd.is_active(T0 + 5_999_999_999));
         assert!(!sd.is_active(T0 + 6_000_000_000));
     }
-    #[test] fn sync_from_new_ip_updates_source() {
+    #[test]
+    fn sync_from_new_ip_updates_source() {
         let sd = SyncDetector::new();
         sd.on_sync(CTRL_IP, T0);
         sd.on_sync(CTRL_IP_2, T0 + 500_000_000);
         assert_eq!(sd.source_ip(), Some(CTRL_IP_2));
         assert!(sd.is_active(T0 + 500_000_000 + 1_000));
     }
-    #[test] fn last_seen_updates_on_each_sync() {
+    #[test]
+    fn last_seen_updates_on_each_sync() {
         let sd = SyncDetector::new();
         sd.on_sync(CTRL_IP, T0);
         assert_eq!(sd.last_seen_nanos(), T0);
         sd.on_sync(CTRL_IP, T0 + 1_000_000_000);
         assert_eq!(sd.last_seen_nanos(), T0 + 1_000_000_000);
     }
-    #[test] fn source_ip_persists_after_timeout() {
+    #[test]
+    fn source_ip_persists_after_timeout() {
         let sd = SyncDetector::new();
         sd.on_sync(CTRL_IP, T0);
         assert!(!sd.is_active(T0 + 5_000_000_000));

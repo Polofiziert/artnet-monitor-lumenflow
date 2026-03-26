@@ -276,11 +276,11 @@ cargo tauri signer sign "dist/LumenFlow_0.2.0_x64.dmg"
 
 LumenFlow uses Tauri's platform-specific paths. The app identifier is `dev.lumenflow.app`.
 
-| Platform | Config directory | Network config |
-|----------|------------------|----------------|
-| **macOS** | `~/Library/Application Support/dev.lumenflow.app/` | `network.json` |
-| **Linux** | `~/.config/dev.lumenflow.app/` (or `$XDG_CONFIG_HOME/dev.lumenflow.app/`) | `network.json` |
-| **Windows** | `%APPDATA%\dev.lumenflow.app\` | `network.json` |
+| Platform    | Config directory                                                          | Network config |
+| ----------- | ------------------------------------------------------------------------- | -------------- |
+| **macOS**   | `~/Library/Application Support/dev.lumenflow.app/`                        | `network.json` |
+| **Linux**   | `~/.config/dev.lumenflow.app/` (or `$XDG_CONFIG_HOME/dev.lumenflow.app/`) | `network.json` |
+| **Windows** | `%APPDATA%\dev.lumenflow.app\`                                            | `network.json` |
 
 ## Backup Strategy
 

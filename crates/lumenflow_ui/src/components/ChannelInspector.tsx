@@ -224,7 +224,9 @@ const ChannelInspector: Component<ChannelInspectorProps> = (props) => {
                   title="Channels flagged as flickering (high variance)"
                 >
                   <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber animate-flicker" />
-                  <span class="inline-block w-[3ch] text-right">{flickerCount()}</span>
+                  <span class="inline-block w-[3ch] text-right">
+                    {flickerCount()}
+                  </span>
                   <span>flicker</span>
                 </span>
               </Show>

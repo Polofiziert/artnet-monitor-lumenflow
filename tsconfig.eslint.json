@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "crates/lumenflow_ui/src/**/*.ts",
+    "crates/lumenflow_ui/src/**/*.tsx"
+  ],
+  "exclude": ["**/dist/**", "**/coverage/**", "node_modules/**", "target/**"]
+}

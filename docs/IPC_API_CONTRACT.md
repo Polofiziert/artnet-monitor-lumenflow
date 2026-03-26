@@ -44,36 +44,36 @@ This document defines the complete contract between the Tauri/Rust backend and t
 
 ## 2. Tauri Commands
 
-| Command                      | Direction | Params                                       | Returns                 | Description                                                                                                                      |
-| ---------------------------- | --------- | -------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `set_active_universes`       | FE → BE   | `{ ids: number[] }`                          | `void`                  | Register viewport-visible universe IDs. Call when sidebar selection, visible tabs, or scroll changes.                            |
-| `get_available_universes`    | FE → BE   | —                                            | `number[]`              | Sorted list of active (initialized) 15-bit port-addresses. Poll every 1–2s when not in mock mode.                                |
-| `get_devices`                | FE → BE   | —                                            | `DeviceInfoDto[]`       | Flat per-bind snapshot (debug/advanced). Prefer `get_artnet_products` for UI.                                                    |
-| `get_artnet_products`        | FE → BE   | —                                            | `ArtNetProductDto[]`    | One entry per physical node (bind IP + MAC); ports flattened across BindIndex. Primary for Devices and Routing.                  |
-| `get_diag_entries`           | FE → BE   | —                                            | `DiagEntryDto[]`        | Snapshot of diagnostic log. Used for initial load; `diag-entry` event for live updates.                                          |
-| `get_controllers`            | FE → BE   | —                                            | `ControllerSeenDto[]`   | List of controllers observed via incoming ArtPoll packets (best-effort; may not be nodes).                                       |
-| `send_ip_prog`               | FE → BE   | `IpProgParams`                               | `IpProgReplyDto`        | Send ArtIpProg unicast to target device. Read-only or programming mode.                                                          |
-| `send_art_address`           | FE → BE   | `ArtAddressParams`                           | `void`                  | Send ArtAddress unicast to program names + per-port In/Out. Verify via subsequent ArtPollReply.                                  |
+| Command                      | Direction | Params                                       | Returns                 | Description                                                                                                                                                                     |
+| ---------------------------- | --------- | -------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set_active_universes`       | FE → BE   | `{ ids: number[] }`                          | `void`                  | Register viewport-visible universe IDs. Call when sidebar selection, visible tabs, or scroll changes.                                                                           |
+| `get_available_universes`    | FE → BE   | —                                            | `number[]`              | Sorted list of active (initialized) 15-bit port-addresses. Poll every 1–2s when not in mock mode.                                                                               |
+| `get_devices`                | FE → BE   | —                                            | `DeviceInfoDto[]`       | Flat per-bind snapshot (debug/advanced). Prefer `get_artnet_products` for UI.                                                                                                   |
+| `get_artnet_products`        | FE → BE   | —                                            | `ArtNetProductDto[]`    | One entry per physical node (bind IP + MAC); ports flattened across BindIndex. Primary for Devices and Routing.                                                                 |
+| `get_diag_entries`           | FE → BE   | —                                            | `DiagEntryDto[]`        | Snapshot of diagnostic log. Used for initial load; `diag-entry` event for live updates.                                                                                         |
+| `get_controllers`            | FE → BE   | —                                            | `ControllerSeenDto[]`   | List of controllers observed via incoming ArtPoll packets (best-effort; may not be nodes).                                                                                      |
+| `send_ip_prog`               | FE → BE   | `IpProgParams`                               | `IpProgReplyDto`        | Send ArtIpProg unicast to target device. Read-only or programming mode.                                                                                                         |
+| `send_art_address`           | FE → BE   | `ArtAddressParams`                           | `void`                  | Send ArtAddress unicast to program names + per-port In/Out. Verify via subsequent ArtPollReply.                                                                                 |
 | `request_device_url`         | FE → BE   | `{ target_ip, esta_man, oem, request_type }` | `string`                | Fetch product/user guide/support URL via ArtDataRequest. Use `oem` (not `oem_code`) as key; value from `ArtNetProductDto.oem_code` (or `DeviceInfoDto` for flat `get_devices`). |
-| `get_network_interfaces_cmd` | FE → BE   | —                                            | `NetworkInterfaceDto[]` | List IPv4 network interfaces (name, ip, subnet, broadcast). Used for NIC selection in Settings.                                  |
-| `get_network_settings_cmd`   | FE → BE   | —                                            | `NetworkSettingsDto`    | Persisted network config (interface mode, CIDR, discovery targets).                                                              |
-| `set_network_settings_cmd`   | FE → BE   | `{ settings: NetworkSettingsDto }`           | `void`                  | Persist settings and restart UDP listener/discovery. Apply on change; no separate Apply button.                                  |
+| `get_network_interfaces_cmd` | FE → BE   | —                                            | `NetworkInterfaceDto[]` | List IPv4 network interfaces (name, ip, subnet, broadcast). Used for NIC selection in Settings.                                                                                 |
+| `get_network_settings_cmd`   | FE → BE   | —                                            | `NetworkSettingsDto`    | Persisted network config (interface mode, CIDR, discovery targets).                                                                                                             |
+| `set_network_settings_cmd`   | FE → BE   | `{ settings: NetworkSettingsDto }`           | `void`                  | Persist settings and restart UDP listener/discovery. Apply on change; no separate Apply button.                                                                                 |
 
 ---
 
 ## 3. Tauri Events
 
-| Event              | Direction | Payload             | Frequency  | Description                                          |
-| ------------------ | --------- | ------------------- | ---------- | ---------------------------------------------------- |
-| `dmx-frame`        | BE → FE   | `number[]` (binary) | 60Hz       | Binary DMX data for active universes only. See §4.1. |
-| `universe-metrics` | BE → FE   | `number[]` (binary) | 60Hz       | Sync status + per-universe metrics. See §4.2.        |
-| `route-info`       | BE → FE   | `number[]` (binary) | ~10Hz      | Per-universe source IPs, pkt/s, lastSeen. See §4.3.  |
-| `jitter-samples`   | BE → FE   | JSON `number[]`     | ~10Hz      | Inter-packet arrival intervals in ms. See §4.4.      |
-| `devices-updated`  | BE → FE   | JSON `DevicesUpdatedDto` | On change (~10Hz max emit block) | Push snapshot of **products** (`ArtNetProductDto[]`) when registry version changes. |
-| `device-poll-reply-activity` | BE → FE | JSON `DevicePollReplyActivityDto` | On deduped PollReply bundle | Per-product ArtPollReply activity pulse for Devices UI (bind bundle deduped). |
-| `diag-entry`       | BE → FE   | JSON                | On receipt | Single diagnostic message from ArtDiagData.          |
-| `timecode`         | BE → FE   | JSON                | On receipt | SMPTE/EBU timecode from ArtTimeCode.                 |
-| `time-sync`        | BE → FE   | JSON                | On receipt | Real-time clock sync from ArtTimeSync.               |
+| Event                        | Direction | Payload                           | Frequency                        | Description                                                                         |
+| ---------------------------- | --------- | --------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------- |
+| `dmx-frame`                  | BE → FE   | `number[]` (binary)               | 60Hz                             | Binary DMX data for active universes only. See §4.1.                                |
+| `universe-metrics`           | BE → FE   | `number[]` (binary)               | 60Hz                             | Sync status + per-universe metrics. See §4.2.                                       |
+| `route-info`                 | BE → FE   | `number[]` (binary)               | ~10Hz                            | Per-universe source IPs, pkt/s, lastSeen. See §4.3.                                 |
+| `jitter-samples`             | BE → FE   | JSON `number[]`                   | ~10Hz                            | Inter-packet arrival intervals in ms. See §4.4.                                     |
+| `devices-updated`            | BE → FE   | JSON `DevicesUpdatedDto`          | On change (~10Hz max emit block) | Push snapshot of **products** (`ArtNetProductDto[]`) when registry version changes. |
+| `device-poll-reply-activity` | BE → FE   | JSON `DevicePollReplyActivityDto` | On deduped PollReply bundle      | Per-product ArtPollReply activity pulse for Devices UI (bind bundle deduped).       |
+| `diag-entry`                 | BE → FE   | JSON                              | On receipt                       | Single diagnostic message from ArtDiagData.                                         |
+| `timecode`                   | BE → FE   | JSON                              | On receipt                       | SMPTE/EBU timecode from ArtTimeCode.                                                |
+| `time-sync`                  | BE → FE   | JSON                              | On receipt                       | Real-time clock sync from ArtTimeSync.                                              |
 
 ---
 
@@ -420,17 +420,17 @@ interface NetworkSettingsDto {
 
 The frontend must support **mock** and **real** modes with a unified interface:
 
-| Data Domain      | Mock Source                   | Real Source                              |
-| ---------------- | ----------------------------- | ---------------------------------------- |
-| DMX channels     | `mockData.tickMockUniverses`  | `dmx-frame` event                        |
-| Universe list    | `createMockUniverses` IDs     | `get_available_universes`                |
-| Universe metrics | N/A (stale/source badges)     | `universe-metrics` event                 |
+| Data Domain      | Mock Source                   | Real Source                               |
+| ---------------- | ----------------------------- | ----------------------------------------- |
+| DMX channels     | `mockData.tickMockUniverses`  | `dmx-frame` event                         |
+| Universe list    | `createMockUniverses` IDs     | `get_available_universes`                 |
+| Universe metrics | N/A (stale/source badges)     | `universe-metrics` event                  |
 | Devices          | `createMockProducts`          | `get_artnet_products` + `devices-updated` |
-| Sync status      | `networkStats.artSyncActive`  | `universe-metrics` sync_active           |
-| Source IPs       | `networkStats.sourceIps`      | **GAP** — backend needs route/source IPs |
-| Routes           | `mockUniverses` → RouteInfo   | **GAP** — backend needs route emission   |
-| Diagnostics      | N/A                           | `diag-entry` + `get_diag_entries`        |
-| Network stats    | `networkStats` (jitter, load) | **GAP** — backend needs network stats    |
+| Sync status      | `networkStats.artSyncActive`  | `universe-metrics` sync_active            |
+| Source IPs       | `networkStats.sourceIps`      | **GAP** — backend needs route/source IPs  |
+| Routes           | `mockUniverses` → RouteInfo   | **GAP** — backend needs route emission    |
+| Diagnostics      | N/A                           | `diag-entry` + `get_diag_entries`         |
+| Network stats    | `networkStats` (jitter, load) | **GAP** — backend needs network stats     |
 
 **Identified gaps (to implement):**
 
@@ -523,7 +523,7 @@ pub struct AppState {
 | `route-info` event                      | Implemented | Per-universe source IPs, pkt/s for Routing Matrix                                                                                  |
 | `input_port_addresses` in DeviceInfoDto | Implemented | For routing matrix input subscriptions                                                                                             |
 | `network-stats` event                   | Planned     | Jitter, load, packet rate for NetworkDiagnostics                                                                                   |
-| ArtAddress command                      | Implemented | `send_art_address` for remote Port Name / Long Name configuration. Verify via ArtPollReply updates.                              |
+| ArtAddress command                      | Implemented | `send_art_address` for remote Port Name / Long Name configuration. Verify via ArtPollReply updates.                                |
 | ArtInput command                        | Planned     | Enable/disable inputs                                                                                                              |
 | RDM commands                            | Planned     | Feature-gated                                                                                                                      |
 

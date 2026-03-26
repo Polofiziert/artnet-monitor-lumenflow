@@ -5,7 +5,7 @@
 
 use zerocopy::{FromBytes, FromZeroes};
 
-use super::{ParseError, ART_NET_HEADER, ART_NET_PROTOCOL_VERSION, OpCode};
+use super::{OpCode, ParseError, ART_NET_HEADER, ART_NET_PROTOCOL_VERSION};
 
 /// Art-Net `OpCommand` fixed header (12 bytes). Data follows as variable-length ASCII text.
 #[repr(C, packed)]
@@ -43,12 +43,10 @@ pub(super) fn parse_command(payload: &[u8]) -> Result<(&ArtCommandHeader, &[u8])
             actual: payload.len(),
         });
     }
-    let header = ArtCommandHeader::ref_from_prefix(payload).ok_or(
-        ParseError::TooShort {
-            expected: HEADER_SIZE,
-            actual: payload.len(),
-        },
-    )?;
+    let header = ArtCommandHeader::ref_from_prefix(payload).ok_or(ParseError::TooShort {
+        expected: HEADER_SIZE,
+        actual: payload.len(),
+    })?;
     if header.id != *ART_NET_HEADER {
         return Err(ParseError::InvalidHeader);
     }

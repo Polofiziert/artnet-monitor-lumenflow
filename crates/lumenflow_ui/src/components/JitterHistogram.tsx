@@ -1,9 +1,6 @@
 import type { Component } from "solid-js";
 import { onMount, onCleanup } from "solid-js";
-import {
-  getJitterChartPalette,
-  type ResolvedTheme,
-} from "../lib/themePalette";
+import { getJitterChartPalette, type ResolvedTheme } from "../lib/themePalette";
 
 interface JitterHistogramProps {
   samples: () => number[];

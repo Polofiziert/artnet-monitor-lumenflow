@@ -58,9 +58,7 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
       return device.short_name || "Manual entry";
     }
     const base =
-      device.long_name.trim() ||
-      device.short_name.trim() ||
-      "Unknown Device";
+      device.long_name.trim() || device.short_name.trim() || "Unknown Device";
     const ordinal = nodeOrdinalById().get(device.product_id);
     return ordinal != null ? `${base} [${ordinal}]` : base;
   };
@@ -282,7 +280,8 @@ const RoutingMatrix: Component<RoutingMatrixProps> = (props) => {
                         <div
                           class="flex items-center justify-center bg-obsidian min-h-[40px]"
                           classList={{
-                            "border-l border-l-teal/10": col.isFirstPortOfProduct,
+                            "border-l border-l-teal/10":
+                              col.isFirstPortOfProduct,
                           }}
                         >
                           <Show

@@ -133,9 +133,7 @@ const UniverseMap: Component<UniverseHeatmapProps> = (props) => {
     const stops = getThermalStops(resolved);
     const selectedStroke = resolved === "dark" ? "#2DD4BF" : "#0F766E";
     const hoverStroke =
-      resolved === "dark"
-        ? "rgba(255,255,255,0.5)"
-        : "rgba(24,24,27,0.45)";
+      resolved === "dark" ? "rgba(255,255,255,0.5)" : "rgba(24,24,27,0.45)";
     const labelHigh = resolved === "dark" ? "#0B0B0B" : "#18181B";
     const labelLow = resolved === "dark" ? "#A3A3A3" : "#71717A";
 

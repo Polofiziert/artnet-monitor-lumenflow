@@ -279,7 +279,7 @@ docker compose -f docker-compose.virtual-network.yml up
 
 Stop: `docker compose -f docker-compose.virtual-network.yml down`
 
-The **node** service runs `virtual-node --profile swisson-xnd8` (eight `ArtPollReply` binds, `ArtTod`* / narrow `ArtRdm` / `ArtIpProgReply` stubs). Consoles use `--sync-target 10.255.255.255:6454` so **ArtSync** follows each DMX batch (DMXW_02-style directed broadcast).
+The **node** service runs `virtual-node --profile swisson-xnd8` (eight `ArtPollReply` binds, `ArtTod`\* / narrow `ArtRdm` / `ArtIpProgReply` stubs). Consoles use `--sync-target 10.255.255.255:6454` so **ArtSync** follows each DMX batch (DMXW_02-style directed broadcast).
 
 **Terminal 2** — Run LumenFlow with discovery targets:
 
@@ -333,16 +333,13 @@ sudo tcpdump -i docker0 -s 0 -w artnet_docker.pcap udp port 6454
 
 #### Capture and display filters
 
-
 | Filter                                  | Purpose                    |
 | --------------------------------------- | -------------------------- |
 | Capture: `udp port 6454`                | Art-Net default port       |
 | Capture: `udp portrange 6454-6457`      | All LumenFlow Docker ports |
 | Display: `udp.port == 6454` or `artnet` | Wireshark                  |
 
-
 ### Test Scenarios
-
 
 | Scenario             | Setup                                                                                     | LumenFlow Verification           |
 | -------------------- | ----------------------------------------------------------------------------------------- | -------------------------------- |
@@ -350,7 +347,6 @@ sudo tcpdump -i docker0 -s 0 -w artnet_docker.pcap udp port 6454
 | Merge (2 SRC)        | 2 consoles, same universes, different --physical (or different IPs with loopback aliases) | Routing Matrix: "2 SRC" badge    |
 | Device discovery     | 1 virtual node                                                                            | Devices view: node appears       |
 | Stale → Disconnected | Console runs, then stop                                                                   | Universe goes amber → red        |
-
 
 ---
 
@@ -520,7 +516,6 @@ Failing coverage check blocks merge.
 
 Measured on reference machine (MacBook Pro 14" M3):
 
-
 | Metric                 | Target         | Current |
 | ---------------------- | -------------- | ------- |
 | Parser latency         | <1µs           | ✓ 0.8µs |
@@ -528,7 +523,6 @@ Measured on reference machine (MacBook Pro 14" M3):
 | 500 universe read      | <10ms          | ✓ 8.2ms |
 | UI frame time          | <16ms (60 FPS) | ✓ 14ms  |
 | Memory (500 universes) | <50MB          | ✓ 42MB  |
-
 
 Regressions > 5% fail CI.
 
@@ -539,29 +533,34 @@ Regressions > 5% fail CI.
 ### Adding New Tests
 
 1. **Decide test type:**
-  - Bug? → Add regression test alongside fix
-  - Feature? → Test-first (write test before code)
-  - Refactor? → Ensure existing tests still pass
+
+- Bug? → Add regression test alongside fix
+- Feature? → Test-first (write test before code)
+- Refactor? → Ensure existing tests still pass
+
 2. **Follow guidelines:**
-  - `#![deny(clippy::unwrap_used)]` - no panics
-  - All Result types handled
-  - Deterministic (no randomness except in fuzz)
-  - Document why test exists (not just how)
+
+- `#![deny(clippy::unwrap_used)]` - no panics
+- All Result types handled
+- Deterministic (no randomness except in fuzz)
+- Document why test exists (not just how)
+
 3. **Example:**
-  ```rust
-   #[test]
-   fn test_artaddress_packet_generation() {
-       // Arrange
-       let device = Device::new("192.168.1.100", 1);
 
-       // Act
-       let packet = device.generate_artaddress_packet(0, 0).unwrap();
+```rust
+ #[test]
+ fn test_artaddress_packet_generation() {
+     // Arrange
+     let device = Device::new("192.168.1.100", 1);
 
-       // Assert
-       assert_eq!(packet[0..8], *b"Art-Net\0");
-       assert_eq!(packet[8..10], [0x60, 0x00]); // ArtAddress opcode
-   }
-  ```
+     // Act
+     let packet = device.generate_artaddress_packet(0, 0).unwrap();
+
+     // Assert
+     assert_eq!(packet[0..8], *b"Art-Net\0");
+     assert_eq!(packet[8..10], [0x60, 0x00]); // ArtAddress opcode
+ }
+```
 
 ### Updating Visual Baselines
 

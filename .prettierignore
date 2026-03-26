@@ -1,0 +1,16 @@
+.cursor/
+target/
+dist/
+
+# Generated schema output
+crates/**/src-tauri/gen/
+
+# Playwright output
+playwright-report/
+test-results/
+
+# Lockfiles and artifacts
+pnpm-lock.yaml
+
+# Local working docs / notes
+HUMAN_THINKING/

@@ -15,12 +15,10 @@ const HelpPanel: Component<HelpPanelProps> = (props) => {
   createEffect(() => {
     const s = props.section();
     const el =
-      s === "overview"
-        ? overviewRef
-        : s === "manual"
-          ? manualRef
-          : aboutRef;
-    queueMicrotask(() => el?.scrollIntoView({ block: "start", behavior: "smooth" }));
+      s === "overview" ? overviewRef : s === "manual" ? manualRef : aboutRef;
+    queueMicrotask(() =>
+      el?.scrollIntoView({ block: "start", behavior: "smooth" })
+    );
   });
 
   return (
@@ -84,8 +82,8 @@ const HelpPanel: Component<HelpPanelProps> = (props) => {
                 overview and network load.
               </li>
               <li>
-                <strong class="text-secondary">Inspector</strong> — channel
-                grid and detail for one universe.
+                <strong class="text-secondary">Inspector</strong> — channel grid
+                and detail for one universe.
               </li>
               <li>
                 <strong class="text-secondary">Routing Matrix</strong> — who
@@ -98,28 +96,38 @@ const HelpPanel: Component<HelpPanelProps> = (props) => {
             </ul>
           </div>
 
-          <div ref={manualRef} class="mb-6 scroll-mt-2 border-t border-edge pt-5">
+          <div
+            ref={manualRef}
+            class="mb-6 scroll-mt-2 border-t border-edge pt-5"
+          >
             <h3 class="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted">
               User manual
             </h3>
             <p class="mb-2 leading-relaxed text-[11px] text-muted">
-              The full guide covers views, universe notation (Net:SubNet:Universe),
-              charts (network load and inter-packet arrival), routing matrix
-              behavior, settings, and troubleshooting. Protocol details align
-              with the Art-Net 4 specification (Artistic Licence); use{" "}
-              <strong class="text-secondary">Help → Art-Net 4 Specification</strong>{" "}
+              The full guide covers views, universe notation
+              (Net:SubNet:Universe), charts (network load and inter-packet
+              arrival), routing matrix behavior, settings, and troubleshooting.
+              Protocol details align with the Art-Net 4 specification (Artistic
+              Licence); use{" "}
+              <strong class="text-secondary">
+                Help → Art-Net 4 Specification
+              </strong>{" "}
               to open the official document.
             </p>
             <p class="mb-2 text-[11px] text-muted">
-              Header system status thresholds: <strong class="text-secondary">WARNING</strong>{" "}
-              when flickering channels &gt; 4 or last jitter sample &gt; 30 ms;{" "}
-              <strong class="text-secondary">ERROR</strong> when no Art-Net data is
-              received for more than 5 seconds.
+              Header system status thresholds:{" "}
+              <strong class="text-secondary">WARNING</strong> when flickering
+              channels &gt; 4 or last jitter sample &gt; 30 ms;{" "}
+              <strong class="text-secondary">ERROR</strong> when no Art-Net data
+              is received for more than 5 seconds.
             </p>
             <p class="text-[11px] text-muted">
               <strong class="text-secondary">Search:</strong> press{" "}
               <kbd class="rounded bg-obsidian px-1 font-mono text-[10px]">
-                {/Mac|iPhone|iPad|iPod/i.test(navigator.userAgent) ? "⌘" : "Ctrl"}+K
+                {/Mac|iPhone|iPad|iPod/i.test(navigator.userAgent)
+                  ? "⌘"
+                  : "Ctrl"}
+                +K
               </kbd>{" "}
               to focus the header search field.
             </p>
@@ -130,9 +138,9 @@ const HelpPanel: Component<HelpPanelProps> = (props) => {
               About
             </h3>
             <p class="text-[11px] text-muted">
-              <span class="font-semibold text-secondary">LumenFlow</span> — Art-Net
-              4 monitoring and control. See the window title bar for version
-              information.
+              <span class="font-semibold text-secondary">LumenFlow</span> —
+              Art-Net 4 monitoring and control. See the window title bar for
+              version information.
             </p>
           </div>
         </div>

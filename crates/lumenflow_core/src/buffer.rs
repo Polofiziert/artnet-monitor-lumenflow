@@ -248,10 +248,7 @@ impl UniverseStore {
     ///
     /// Returns `None` if the universe has never received data.
     #[inline]
-    pub fn slot_metrics(
-        &self,
-        port_address: u16,
-    ) -> Option<(Staleness, u8, u64, bool)> {
+    pub fn slot_metrics(&self, port_address: u16) -> Option<(Staleness, u8, u64, bool)> {
         let idx = port_address as usize;
         if idx >= self.slots.len() {
             return None;
@@ -275,10 +272,7 @@ impl UniverseStore {
     ///
     /// Returns `None` if the universe has never received data.
     #[inline]
-    pub fn slot_route_info(
-        &self,
-        port_address: u16,
-    ) -> Option<(u32, u32, u32, u64)> {
+    pub fn slot_route_info(&self, port_address: u16) -> Option<(u32, u32, u32, u64)> {
         let idx = port_address as usize;
         if idx >= self.slots.len() {
             return None;
@@ -346,7 +340,7 @@ mod tests {
         buf.update(&[0u8; 2], 0);
         let elapsed = buf.last_update_elapsed();
         assert!(elapsed.is_some());
-        assert!(elapsed.map_or(false, |d| d < Duration::from_secs(1)));
+        assert!(elapsed.is_some_and(|d| d < Duration::from_secs(1)));
     }
 
     #[test]

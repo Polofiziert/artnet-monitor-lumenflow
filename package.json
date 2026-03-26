@@ -6,7 +6,7 @@
   "license": "GPL-3.0-or-later OR MIT",
   "type": "module",
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.19.0",
     "pnpm": ">=8.0.0"
   },
   "packageManager": "pnpm@8.15.0",
@@ -19,7 +19,7 @@
     "build:rust": "cargo build --release -p lumenflow_core -p lumenflow_ui",
     "dev:ui": "vite",
     "preview": "vite preview",
-    "lint": "eslint . --ext .ts,.tsx --fix && cargo clippy --all-targets --all-features -- -D warnings",
+    "lint": "eslint . --fix && cargo clippy --all-targets --all-features -- -D warnings",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -59,7 +59,7 @@
     "@types/node": "^20.9.0",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
-    "@vitest/coverage-v8": "^1.0.0",
+    "@vitest/coverage-v8": "0.34.6",
     "autoprefixer": "^10.4.16",
     "eslint": "^8.52.0",
     "jsdom": "^29.0.1",

@@ -13,9 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::artnet::{build_our_poll_reply, ART_NET_PORT};
 use crate::device::DeviceRegistry;
-use crate::network::{
-    build_art_poll, default_spec_broadcast_targets, ArtNetSocket,
-};
+use crate::network::{build_art_poll, default_spec_broadcast_targets, ArtNetSocket};
 
 const POLL_INTERVAL_MS: u64 = 2500;
 
@@ -100,11 +98,7 @@ pub fn spawn_discovery_with_config(
     let unicast_targets = config.unicast_targets;
 
     tokio::spawn(async move {
-        let socket = match ArtNetSocket::bind(
-            std::net::SocketAddr::from(([0, 0, 0, 0], 0)),
-        )
-        .await
-        {
+        let socket = match ArtNetSocket::bind(std::net::SocketAddr::from(([0, 0, 0, 0], 0))).await {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!("DiscoveryEngine: failed to bind socket: {e}");
@@ -113,8 +107,7 @@ pub fn spawn_discovery_with_config(
         };
 
         let poll_packet = build_art_poll();
-        let our_reply: Option<[u8; 239]> =
-            our_ip.map(|ip| build_our_poll_reply(ip, our_mac));
+        let our_reply: Option<[u8; 239]> = our_ip.map(|ip| build_our_poll_reply(ip, our_mac));
 
         let mut poll_interval = time::interval(Duration::from_millis(POLL_INTERVAL_MS));
         poll_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
@@ -142,7 +135,10 @@ pub fn spawn_discovery_with_config(
             }
 
             if !broadcast_targets.is_empty() {
-                if let Err(e) = socket.send_to_targets(&poll_packet, &broadcast_targets).await {
+                if let Err(e) = socket
+                    .send_to_targets(&poll_packet, &broadcast_targets)
+                    .await
+                {
                     tracing::warn!("DiscoveryEngine: ArtPoll broadcast failed: {e}");
                 } else {
                     tracing::debug!("DiscoveryEngine: sent ArtPoll");

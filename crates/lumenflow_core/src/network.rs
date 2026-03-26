@@ -25,7 +25,10 @@ pub enum NetworkError {
     SetRecvBuf { size: usize, source: std::io::Error },
 
     #[error("failed to bind to {addr}: {source}")]
-    Bind { addr: SocketAddr, source: std::io::Error },
+    Bind {
+        addr: SocketAddr,
+        source: std::io::Error,
+    },
 
     #[error("failed to convert to async socket: {0}")]
     AsyncConvert(std::io::Error),
@@ -50,7 +53,10 @@ pub struct ArtNetSocket {
 }
 
 impl ArtNetSocket {
-    async fn bind_inner(bind_addr: SocketAddr, enable_broadcast: bool) -> Result<Self, NetworkError> {
+    async fn bind_inner(
+        bind_addr: SocketAddr,
+        enable_broadcast: bool,
+    ) -> Result<Self, NetworkError> {
         let raw = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
             .map_err(NetworkError::SocketCreate)?;
 
@@ -78,8 +84,7 @@ impl ArtNetSocket {
             })?;
 
         let std_socket: std::net::UdpSocket = raw.into();
-        let socket =
-            UdpSocket::from_std(std_socket).map_err(NetworkError::AsyncConvert)?;
+        let socket = UdpSocket::from_std(std_socket).map_err(NetworkError::AsyncConvert)?;
 
         tracing::info!(
             addr = %bind_addr,
@@ -120,8 +125,10 @@ impl ArtNetSocket {
     /// as a last-resort fallback for management sends on some macOS setups where a tuned
     /// socket can return `EHOSTUNREACH` before any packet hits the wire.
     pub async fn bind_minimal_unicast_sender(bind_addr: SocketAddr) -> Result<Self, NetworkError> {
-        let std_socket = std::net::UdpSocket::bind(bind_addr)
-            .map_err(|e| NetworkError::Bind { addr: bind_addr, source: e })?;
+        let std_socket = std::net::UdpSocket::bind(bind_addr).map_err(|e| NetworkError::Bind {
+            addr: bind_addr,
+            source: e,
+        })?;
         std_socket
             .set_nonblocking(true)
             .map_err(NetworkError::SocketCreate)?;
@@ -283,7 +290,7 @@ pub fn build_art_poll_targeted(
     pkt[11] = 0x0e;
     pkt[12] = 0x06; // TalkToMe (0x02) + Send diagnostics (0x04)
     pkt[13] = 0x00; // DpAll
-    // ArtPoll encodes these as Hi/Lo bytes (big-endian on wire).
+                    // ArtPoll encodes these as Hi/Lo bytes (big-endian on wire).
     pkt[14..16].copy_from_slice(&target_top.to_be_bytes());
     pkt[16..18].copy_from_slice(&target_bottom.to_be_bytes());
     pkt[18..20].copy_from_slice(&esta_man.to_be_bytes());
@@ -318,9 +325,12 @@ mod tests {
         });
 
         let test_data = b"Art-Net\0test";
-        sender.send_to(test_data, local_addr).await.unwrap_or_else(|e| {
-            panic!("test: send failed: {e}");
-        });
+        sender
+            .send_to(test_data, local_addr)
+            .await
+            .unwrap_or_else(|e| {
+                panic!("test: send failed: {e}");
+            });
 
         let (data, _from) = receiver.recv().await.unwrap_or_else(|e| {
             panic!("test: recv failed: {e}");

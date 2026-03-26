@@ -23,7 +23,7 @@ fn dmx_parser_throughput(c: &mut Criterion) {
 
 fn ring_buffer_performance(c: &mut Criterion) {
     let mut group = c.benchmark_group("ring_buffer");
-    
+
     for size in [100, 1000, 10000].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             b.iter(|| {
@@ -32,7 +32,7 @@ fn ring_buffer_performance(c: &mut Criterion) {
             });
         });
     }
-    
+
     group.finish();
 }
 

@@ -1,7 +1,7 @@
-use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use dashmap::DashSet;
@@ -9,10 +9,12 @@ use lumenflow_core::artnet::{
     build_art_address, build_art_data_request, build_art_ip_prog, build_our_poll_reply,
     ArtAddressCommand, ArtNetParser, IpProgConfig, ART_ADDRESS_NO_CHANGE, ART_NET_PORT,
 };
-use lumenflow_core::build_art_poll;
 use lumenflow_core::buffer::UniverseStore;
+use lumenflow_core::build_art_poll;
 use lumenflow_core::device::{ArtNetProduct, DeviceInfo, DeviceRegistry};
-use lumenflow_core::engine::{DiscoveryConfig, DiagBuffer, DiagPriority, JitterCollector, SyncDetector, Staleness};
+use lumenflow_core::engine::{
+    DiagBuffer, DiagPriority, DiscoveryConfig, JitterCollector, Staleness, SyncDetector,
+};
 use lumenflow_core::network::{derive_cidr_24_from_ip, resolve_interface_for_cidr, ArtNetSocket};
 use parking_lot::RwLock;
 use tauri::State;
@@ -20,9 +22,9 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::network_commands::NetworkState;
 use lumenflow_core::{epoch_nanos, parse_discovery_targets_from_env, spawn_discovery};
-use tokio_util::sync::CancellationToken;
 use tauri::Emitter;
 use tokio::time;
+use tokio_util::sync::CancellationToken;
 
 /// Shared application state managed by Tauri.
 ///
@@ -214,7 +216,12 @@ fn map_device_to_dto(d: DeviceInfo, cutoff: Instant) -> DeviceInfoDto {
         port: d.port,
         mac_address: format!(
             "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-            d.mac_address[0], d.mac_address[1], d.mac_address[2], d.mac_address[3], d.mac_address[4], d.mac_address[5]
+            d.mac_address[0],
+            d.mac_address[1],
+            d.mac_address[2],
+            d.mac_address[3],
+            d.mac_address[4],
+            d.mac_address[5]
         ),
         short_name: d.short_name,
         long_name: d.long_name,
@@ -415,7 +422,10 @@ pub(crate) enum ListenerCommand {
     },
 }
 
-fn parse_optional_ipv4(value: Option<&str>, field_name: &str) -> Result<Option<std::net::Ipv4Addr>, String> {
+fn parse_optional_ipv4(
+    value: Option<&str>,
+    field_name: &str,
+) -> Result<Option<std::net::Ipv4Addr>, String> {
     match value.map(str::trim).filter(|s| !s.is_empty()) {
         Some(s) => s
             .parse::<std::net::Ipv4Addr>()
@@ -649,13 +659,10 @@ pub async fn request_device_url(
     let mut recv_buf = [0u8; 512];
     let timeout = Duration::from_secs(2);
 
-    let (len, _from) = tokio::time::timeout(
-        timeout,
-        socket.inner().recv_from(&mut recv_buf),
-    )
-    .await
-    .map_err(|_| "Timeout: no ArtDataReply received within 2 seconds")?
-    .map_err(|e| format!("Recv error: {e}"))?;
+    let (len, _from) = tokio::time::timeout(timeout, socket.inner().recv_from(&mut recv_buf))
+        .await
+        .map_err(|_| "Timeout: no ArtDataReply received within 2 seconds")?
+        .map_err(|e| format!("Recv error: {e}"))?;
 
     let payload = &recv_buf[..len];
     match ArtNetParser::parse(payload) {
@@ -884,8 +891,10 @@ async fn run_udp_listener(
 
     let mut poll_interval = time::interval(Duration::from_millis(DISCOVERY_POLL_INTERVAL_MS));
     poll_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-    let mut pending_ip_prog: HashMap<std::net::IpAddr, oneshot::Sender<Result<IpProgReplyDto, String>>> =
-        HashMap::new();
+    let mut pending_ip_prog: HashMap<
+        std::net::IpAddr,
+        oneshot::Sender<Result<IpProgReplyDto, String>>,
+    > = HashMap::new();
 
     tracing::info!(
         addr = %bind_addr,
@@ -1272,8 +1281,7 @@ async fn run_udp_listener(
                     }
                     Err(e) => {
                         let len = data.len();
-                        let looks_like_poll_reply = len >= 10
-                            && len <= 239
+                        let looks_like_poll_reply = (10..=239).contains(&len)
                             && data.starts_with(lumenflow_core::artnet::ART_NET_HEADER)
                             && data.get(8..10).map(|s| u16::from_le_bytes([s[0], s[1]])) == Some(0x2100);
                         if looks_like_poll_reply {
@@ -1339,7 +1347,8 @@ mod unicast_poll_tests {
 /// them into the shared `UniverseStore` and `DeviceRegistry`.
 #[allow(dead_code)] // Replaced by start_network_listeners; kept for tests
 pub fn start_udp_listener(app_handle: tauri::AppHandle, state: &AppState) {
-    let bind_addr = std::net::SocketAddr::from(([0, 0, 0, 0], lumenflow_core::artnet::ART_NET_PORT));
+    let bind_addr =
+        std::net::SocketAddr::from(([0, 0, 0, 0], lumenflow_core::artnet::ART_NET_PORT));
     let cancel = CancellationToken::new();
     let state_clone = state.clone();
     let (_tx, rx) = mpsc::channel(8);
@@ -1376,7 +1385,10 @@ pub fn start_network_listeners(
                 .first()
                 .cloned()
                 .unwrap_or_else(|| crate::network_commands::BindTarget {
-                    bind_addr: std::net::SocketAddr::from(([0, 0, 0, 0], lumenflow_core::artnet::ART_NET_PORT)),
+                    bind_addr: std::net::SocketAddr::from((
+                        [0, 0, 0, 0],
+                        lumenflow_core::artnet::ART_NET_PORT,
+                    )),
                     our_ip: None,
                     subnet_broadcast: None,
                 });
@@ -1541,16 +1553,15 @@ mod tests {
     #[test]
     fn parse_optional_ipv4_valid_is_some() {
         assert_eq!(
-            parse_optional_ipv4(Some(" 192.168.1.10 "), "new_ip")
-                .expect("valid IPv4 should parse"),
+            parse_optional_ipv4(Some(" 192.168.1.10 "), "new_ip").expect("valid IPv4 should parse"),
             Some(std::net::Ipv4Addr::new(192, 168, 1, 10))
         );
     }
 
     #[test]
     fn parse_optional_ipv4_invalid_is_error() {
-        let err =
-            parse_optional_ipv4(Some("999.1.1.1"), "new_ip").expect_err("invalid IPv4 should error");
+        let err = parse_optional_ipv4(Some("999.1.1.1"), "new_ip")
+            .expect_err("invalid IPv4 should error");
         assert!(err.contains("Invalid new_ip"));
     }
 
@@ -1602,7 +1613,10 @@ mod tests {
             panic!("expected SendIpProg command");
         }
 
-        let result = resp_rx.await.expect("oneshot receive").expect("ip prog result");
+        let result = resp_rx
+            .await
+            .expect("oneshot receive")
+            .expect("ip prog result");
         assert_eq!(result.ip, expected_ip);
     }
 
@@ -1633,6 +1647,9 @@ mod tests {
             panic!("expected SendArtAddress command");
         }
 
-        resp_rx.await.expect("oneshot receive").expect("art address result");
+        resp_rx
+            .await
+            .expect("oneshot receive")
+            .expect("art address result");
     }
 }

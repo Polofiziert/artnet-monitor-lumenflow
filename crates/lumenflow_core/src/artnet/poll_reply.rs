@@ -67,21 +67,13 @@ impl ArtPollReplyPacket {
 
     /// Returns the short name as a trimmed UTF-8 string (max 18 chars).
     pub fn short_name_str(&self) -> &str {
-        let end = self
-            .short_name
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(18);
+        let end = self.short_name.iter().position(|&b| b == 0).unwrap_or(18);
         core::str::from_utf8(&self.short_name[..end]).unwrap_or("")
     }
 
     /// Returns the long name as a trimmed UTF-8 string (max 64 chars).
     pub fn long_name_str(&self) -> &str {
-        let end = self
-            .long_name
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(64);
+        let end = self.long_name.iter().position(|&b| b == 0).unwrap_or(64);
         core::str::from_utf8(&self.long_name[..end]).unwrap_or("")
     }
 
@@ -157,20 +149,18 @@ pub(super) fn parse_poll_reply(payload: &[u8]) -> Result<ArtNetPacket<'_>, Parse
     }
 
     if payload.len() >= full_size {
-        let packet =
-            ArtPollReplyPacket::ref_from_prefix(payload).ok_or(ParseError::TooShort {
-                expected: full_size,
-                actual: payload.len(),
-            })?;
+        let packet = ArtPollReplyPacket::ref_from_prefix(payload).ok_or(ParseError::TooShort {
+            expected: full_size,
+            actual: payload.len(),
+        })?;
         Ok(ArtNetPacket::PollReply(Box::new(*packet)))
     } else {
         let mut padded = [0u8; 239];
         padded[..payload.len()].copy_from_slice(payload);
-        let packet =
-            ArtPollReplyPacket::ref_from_prefix(&padded).ok_or(ParseError::TooShort {
-                expected: full_size,
-                actual: payload.len(),
-            })?;
+        let packet = ArtPollReplyPacket::ref_from_prefix(&padded).ok_or(ParseError::TooShort {
+            expected: full_size,
+            actual: payload.len(),
+        })?;
         Ok(ArtNetPacket::PollReply(Box::new(*packet)))
     }
 }

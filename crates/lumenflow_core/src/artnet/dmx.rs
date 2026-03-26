@@ -3,8 +3,8 @@
 use zerocopy::{FromBytes, FromZeroes};
 
 use super::{
-    ArtNetPacket, ParseError, ART_NET_HEADER, ART_NET_PROTOCOL_VERSION, DMX_CHANNELS_PER_UNIVERSE,
-    OpCode,
+    ArtNetPacket, OpCode, ParseError, ART_NET_HEADER, ART_NET_PROTOCOL_VERSION,
+    DMX_CHANNELS_PER_UNIVERSE,
 };
 
 /// Art-Net `OpDmx` header (18 bytes), followed by 2–512 bytes of DMX data.

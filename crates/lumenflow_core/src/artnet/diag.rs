@@ -45,15 +45,12 @@ impl ArtDiagDataPacket {
 ///
 /// # Errors
 /// Returns `ParseError::TooShort` if the header or data is truncated.
-pub fn parse_diag_data(
-    payload: &[u8],
-) -> Result<(&ArtDiagDataPacket, &[u8]), ParseError> {
+pub fn parse_diag_data(payload: &[u8]) -> Result<(&ArtDiagDataPacket, &[u8]), ParseError> {
     let header_size = core::mem::size_of::<ArtDiagDataPacket>();
-    let packet = ArtDiagDataPacket::ref_from_prefix(payload)
-        .ok_or(ParseError::TooShort {
-            expected: header_size,
-            actual: payload.len(),
-        })?;
+    let packet = ArtDiagDataPacket::ref_from_prefix(payload).ok_or(ParseError::TooShort {
+        expected: header_size,
+        actual: payload.len(),
+    })?;
 
     if packet.id != *ART_NET_HEADER {
         return Err(ParseError::InvalidHeader);
