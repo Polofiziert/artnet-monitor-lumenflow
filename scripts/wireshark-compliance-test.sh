@@ -32,6 +32,7 @@ if ! command -v tshark &>/dev/null; then
 fi
 
 mkdir -p "$PCAP_DIR"
+rm -f "$PCAP_FILE"
 
 echo "Wireshark Art-Net compliance test"
 echo "  Interface: $IFACE"
@@ -45,6 +46,12 @@ TCPDUMP_PID=$!
 # Give tcpdump time to start
 sleep 0.5
 
+# Ensure tcpdump actually started and is still running.
+if ! kill -0 "$TCPDUMP_PID" 2>/dev/null; then
+    echo "FAIL: tcpdump failed to start (missing privileges or device access)."
+    exit 1
+fi
+
 # Send all packet types
 cd "$PROJECT_ROOT"
 cargo run -p lumenflow_cli -- send-all-packets --target 127.0.0.1 2>/dev/null || true
@@ -56,13 +63,27 @@ sleep 1
 kill -INT "$TCPDUMP_PID" 2>/dev/null || true
 wait "$TCPDUMP_PID" 2>/dev/null || true
 
+# Ensure we produced a non-empty capture file (otherwise results are meaningless).
+if [ ! -s "$PCAP_FILE" ]; then
+    echo "FAIL: capture file is empty ($PCAP_FILE)."
+    echo "      This usually means tcpdump lacked permissions or no packets were captured."
+    exit 1
+fi
+
+# Ensure at least one frame was captured (pcap header-only files are non-empty).
+FRAME_COUNT=$(tshark -r "$PCAP_FILE" -T fields -e frame.number | wc -l | tr -d '[:space:]')
+if [ "${FRAME_COUNT:-0}" -lt 1 ]; then
+    echo "FAIL: capture file contains 0 frames ($PCAP_FILE)."
+    exit 1
+fi
+
 # Validate: count malformed packets using two methods.
 # Method 1: Display filter _ws.malformed — works for some dissectors but may not
 #            be set when sub-dissectors (e.g. Art-Net) throw exceptions.
 # Method 2: Grep verbose output — protocol tree shows "[Malformed Packet: PROTO]"
 #            for any malformed packet; this matches what the Wireshark GUI displays.
-MALFORMED_FILTER=$(tshark -r "$PCAP_FILE" -Y "_ws.malformed" -q 2>/dev/null | wc -l | tr -d '[:space:]')
-MALFORMED_VERBOSE=$(tshark -r "$PCAP_FILE" -V 2>/dev/null | grep -c "\[Malformed Packet" 2>/dev/null || echo "0")
+MALFORMED_FILTER=$(tshark -r "$PCAP_FILE" -Y "_ws.malformed" -T fields -e frame.number | wc -l | tr -d '[:space:]')
+MALFORMED_VERBOSE=$(tshark -r "$PCAP_FILE" -V | grep -c "\[Malformed Packet" || echo "0")
 MALFORMED_VERBOSE=$(echo "$MALFORMED_VERBOSE" | tr -d '[:space:]')
 
 if [ "${MALFORMED_FILTER:-0}" -gt 0 ] || [ "${MALFORMED_VERBOSE:-0}" -gt 0 ]; then

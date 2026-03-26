@@ -6,7 +6,7 @@
   "license": "GPL-3.0-or-later OR MIT",
   "type": "module",
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.19.0",
     "pnpm": ">=8.0.0"
   },
   "packageManager": "pnpm@8.15.0",

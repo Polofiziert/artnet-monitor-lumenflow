@@ -11,7 +11,7 @@ use proptest::prelude::*;
 /// Builds a valid OpDmx packet from fuzzed parameters.
 fn build_valid_dmx(universe: u16, sequence: u8, channel_count: usize, fill: u8) -> Vec<u8> {
     // Art-Net requires even length in 2..=512
-    let len = (channel_count.max(2).min(512) & !1) as u16;
+    let len = (channel_count.clamp(2, 512) & !1) as u16;
     let mut pkt = Vec::with_capacity(18 + len as usize);
     pkt.extend_from_slice(b"Art-Net\0");
     pkt.extend_from_slice(&0x5000u16.to_le_bytes());
@@ -62,7 +62,7 @@ proptest! {
         if let Ok(ArtNetPacket::Dmx { header, dmx_data }) = result {
             prop_assert_eq!(header.port_address(), universe);
             prop_assert_eq!(header.sequence, sequence);
-            let expected_len = channel_count.max(2).min(512) & !1;
+            let expected_len = channel_count.clamp(2, 512) & !1;
             prop_assert_eq!(dmx_data.len(), expected_len);
             prop_assert!(dmx_data.iter().all(|&v| v == fill));
         }
