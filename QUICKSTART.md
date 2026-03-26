@@ -88,7 +88,7 @@ docker build -f Dockerfile -t lumenflow .  # Docker image
 
 ## Need Help?
 
-- 📖 See [BUILD_REPORT.md](BUILD_REPORT.md) - Complete overview
+- 📖 See [BUILD_REPORT.md](docs/archive/reports/BUILD_REPORT.md) - Complete overview
 - 🐛 GitHub Issues: Report bugs with system info
 - 💬 GitHub Discussions: Ask questions
 - 📚 Docs folder: Comprehensive guides

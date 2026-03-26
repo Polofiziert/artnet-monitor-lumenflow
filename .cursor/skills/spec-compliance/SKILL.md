@@ -5,15 +5,17 @@ description: >-
   hex-encoded unit tests, fuzz targets, and ParseError handling. Use when adding or
   changing OpCode parsers, packet layouts, or when the user mentions Art-Net bytes,
   parsing, or the spec document. For multi-packet flows, timeouts, merge policy, and
-  UDP hardening, use art-net-protocol-patterns. Canonical naming traps and spec notes:
-  docs/art-net4.txt and docs/development/ARTNET_PROTOCOL_PATTERNS_DMXW_COMPLIANCE.md.
+  UDP hardening, use art-net-protocol-patterns. For operator-facing diagnostics
+  semantics and warning language, use light-bytes-diagnostics. Canonical naming traps
+  and spec notes: docs/art-net4.txt and
+  docs/development/ARTNET_PROTOCOL_PATTERNS_DMXW_COMPLIANCE.md.
 ---
 
 # Art-Net 4 Spec-Compliance
 
 Ensures every new OpCode handler strictly follows Art-Net 4 (Artistic Licence) specifications. Uses `#[repr(C, packed)]` structs with `zerocopy` for zero-copy byte-casting, and validates against hex-encoded sample packets.
 
-**Multi-packet behaviour** (discovery windows, verify-after-ArtAddress, DMX merge policy, RDM transaction rules, unstable networks) belongs in [art-net-protocol-patterns](../art-net-protocol-patterns/SKILL.md). This skill stays on the **wire** and **parse** path.
+**Multi-packet behaviour** (discovery windows, verify-after-ArtAddress, DMX merge policy, RDM transaction rules, unstable networks) belongs in [art-net-protocol-patterns](../art-net-protocol-patterns/SKILL.md). **Diagnostics message semantics and triage wording** belong in [light-bytes-diagnostics](../light-bytes-diagnostics/SKILL.md). This skill stays on the **wire** and **parse** path.
 
 ## Project docs (read before inventing field names)
 
