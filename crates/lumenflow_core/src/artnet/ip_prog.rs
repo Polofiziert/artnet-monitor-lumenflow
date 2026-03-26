@@ -264,25 +264,16 @@ pub fn build_art_ip_prog(config: &IpProgConfig) -> [u8; 34] {
     pkt[14] = command;
     // filler2 at 15
 
-    let ip_bytes = config
-        .ip
-        .map(|a| a.octets())
-        .unwrap_or([0u8; 4]);
+    let ip_bytes = config.ip.map(|a| a.octets()).unwrap_or([0u8; 4]);
     pkt[16..20].copy_from_slice(&ip_bytes);
 
-    let sm_bytes = config
-        .subnet_mask
-        .map(|a| a.octets())
-        .unwrap_or([0u8; 4]);
+    let sm_bytes = config.subnet_mask.map(|a| a.octets()).unwrap_or([0u8; 4]);
     pkt[20..24].copy_from_slice(&sm_bytes);
 
     let port = config.port.unwrap_or(6454);
     pkt[24..26].copy_from_slice(&port.to_be_bytes());
 
-    let gw_bytes = config
-        .gateway
-        .map(|a| a.octets())
-        .unwrap_or([0u8; 4]);
+    let gw_bytes = config.gateway.map(|a| a.octets()).unwrap_or([0u8; 4]);
     pkt[26..30].copy_from_slice(&gw_bytes);
     // spare at 30-33
 

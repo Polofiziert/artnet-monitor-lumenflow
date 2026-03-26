@@ -36,7 +36,7 @@ fn build_poll_reply(ip: [u8; 4], short_name: &str) -> Vec<u8> {
     pkt[15] = 0x19; // Port 6454 LE
     pkt[16] = 0x01;
     pkt[17] = 0x02; // Firmware 1.2 BE
-    // NetSwitch=0, SubSwitch=0
+                    // NetSwitch=0, SubSwitch=0
     let name_bytes = short_name.as_bytes();
     let copy_len = name_bytes.len().min(18);
     pkt[26..26 + copy_len].copy_from_slice(&name_bytes[..copy_len]);
@@ -79,7 +79,10 @@ fn pipeline_parse_dmx_and_store_snapshot() {
     }
 
     let mut out = [0u8; 512];
-    assert!(store.snapshot(0x0005, &mut out), "universe 0x0005 must exist after update");
+    assert!(
+        store.snapshot(0x0005, &mut out),
+        "universe 0x0005 must exist after update"
+    );
     assert_eq!(out[0], 0xFF);
     assert_eq!(out[100], 0x80);
     assert_eq!(out[511], 0x42);
@@ -112,12 +115,21 @@ fn pipeline_multiple_universes_stay_isolated() {
 
     let mut out = [0u8; 512];
     assert!(store.snapshot(0x0001, &mut out));
-    assert!(out.iter().all(|&v| v == 0xAA), "universe 1 must contain only 0xAA");
+    assert!(
+        out.iter().all(|&v| v == 0xAA),
+        "universe 1 must contain only 0xAA"
+    );
 
     assert!(store.snapshot(0x0002, &mut out));
-    assert!(out.iter().all(|&v| v == 0xBB), "universe 2 must contain only 0xBB");
+    assert!(
+        out.iter().all(|&v| v == 0xBB),
+        "universe 2 must contain only 0xBB"
+    );
 
-    assert!(!store.snapshot(0xFFFF, &mut out), "non-existent universe must return false");
+    assert!(
+        !store.snapshot(0xFFFF, &mut out),
+        "non-existent universe must return false"
+    );
 }
 
 #[test]

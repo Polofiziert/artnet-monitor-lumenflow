@@ -1,11 +1,10 @@
 # Art-Net protocol patterns (DMX-Workshop & reference captures)
 
-**Naming:** This document combines **(A)** observed **packet captures** (§0–§1) with **(B)** **Art-Net 4** behaviour and **OpCode** coverage from the official specification. Primary machine-readable source in-repo: **`docs/art-net4.txt`** (extract from the PDF, Artistic Licence). **(B)** is included so the pattern list is **feature-complete** relative to the spec’s major families—not only what appears in the Swisson pcaps. It is still *not* a full normative substitute for the PDF; field offsets and edge cases must be taken from the specification document.
+**Naming:** This document combines **(A)** observed **packet captures** (§0–§1) with **(B)** **Art-Net 4** behaviour and **OpCode** coverage from the official specification. Primary machine-readable source in-repo: **`docs/art-net4.txt`** (extract from the PDF, Artistic Licence). **(B)** is included so the pattern list is **feature-complete** relative to the spec’s major families—not only what appears in the Swisson pcaps. It is still _not_ a full normative substitute for the PDF; field offsets and edge cases must be taken from the specification document.
 
 ---
 
 ## 0. Reference captures (inventory)
-
 
 | File                                                                      | Topology                                             | Characterization                                                                                                               |
 | ------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -13,15 +12,13 @@
 | `wireshark/references/Network_A2R_Swisson_DMXW_02.pcapng`                 | Same **2.0.0.102** / **2.0.0.11**                    | **DMX + sync** emphasis: **ArtDMX** unicast to node, **ArtSync** broadcast; lighter **TOD**; **no ArtRdm** in this file.       |
 | `wireshark/references/artnet_compliance_test.pcap`                        | **127.0.0.1** loopback                               | **Synthetic** sequence: six frames per OpCode (generator / unit-test style), covering opcodes less common in the Swisson runs. |
 
-
-*Counts below are exact per file (`tshark -Y artnet -T fields -e artnet.header.opcode | sort | uniq -c`). Wireshark labels should be checked against the Art-Net 4 PDF for authoritative names.*
+_Counts below are exact per file (`tshark -Y artnet -T fields -e artnet.header.opcode | sort | uniq -c`). Wireshark labels should be checked against the Art-Net 4 PDF for authoritative names._
 
 ---
 
 ## 1. Packet types seen (by file)
 
 ### 1.1 `DMXW_03` — `Network_A2R_Swisson_DMXW_03_ConformenceTest.pcapng` (4577 Art-Net frames)
-
 
 | OpCode (LE) | Name (Wireshark) | Count | Role                                     |
 | ----------- | ---------------- | ----- | ---------------------------------------- |
@@ -35,11 +32,9 @@
 | 0xF800      | ArtIpProg        | 24    | IP programming / probe bursts.           |
 | 0x8300      | ArtRdm           | 347   | RDM over Art-Net (GET / response).       |
 
-
 **Not observed here:** `ArtIpProgReply` (0xF900), `ArtSync`, `ArtInput`, etc.
 
 ### 1.2 `DMXW_02` — `Network_A2R_Swisson_DMXW_02.pcapng` (1659 Art-Net frames)
-
 
 | OpCode (LE) | Name (Wireshark) | Count | Role                                                                    |
 | ----------- | ---------------- | ----- | ----------------------------------------------------------------------- |
@@ -53,7 +48,6 @@
 | 0x8200      | ArtTodControl    | 8     | TOD control.                                                            |
 | 0xF800      | ArtIpProg        | 8     | IP programming (paired with TOD in opening sequence).                   |
 
-
 **Not observed here:** **ArtRdm** (0x8300). **No** **0xF900** (ArtIpProgReply).
 
 **Addressing pattern (DMX vs Sync):** **ArtDMX** → **unicast** node IP; **ArtSync** → **directed IPv4 broadcast** (same subnet style as **ArtPoll**).
@@ -62,51 +56,51 @@
 
 Six samples each: **ArtPoll**, **ArtPollReply**, **ArtDMX**, **ArtSync**, **ArtAddress**, **ArtCommand** (0x2400), **ArtInput** (0x7000), **ArtTrigger** (0x9900), **ArtIpProg**, **ArtDataRequest** (0x2700). **No** **ArtDataReply** (0x2800) in this file.
 
-*Use case:* quick **parser/builder** coverage or regression vectors; not representative of a real fixture conversation.
+_Use case:_ quick **parser/builder** coverage or regression vectors; not representative of a real fixture conversation.
 
 ### 1.4 Art-Net 4 — specification baseline (all `lumenflow_core` OpCodes)
 
 The following **matches `lumenflow_core::artnet::OpCode`** (the crate’s supported set). The **Art-Net 4 PDF** remains authoritative for field layouts; if a future spec revision adds opcodes **not** in this enum, they would appear in the PDF first—then **extend the enum** and this table.
 
-| OpCode (LE) | Name | Spec domain / role (summary) |
-|-------------|------|------------------------------|
-| 0x2000 | ArtPoll | Discovery; **TalkToMe** flags (e.g. reply-on-change, diagnostics, **targeted** poll with port/OEM filters). |
-| 0x2100 | ArtPollReply | Node identity; **Bind Index**; **Port Name** (per-port label, spec) and **Long Name**; port types; **15-bit** address fields (**Net**, **SubUni**). |
-| 0x2300 | ArtDiagData | **Diagnostics** text stream to controllers (priority, UTF-8 payload). |
-| 0x2400 | ArtCommand | **OEM / remote** text command channel. |
-| 0x2700 | ArtDataRequest | Request **OEM file / blob** data (paired with **ArtDataReply**). |
-| 0x2800 | ArtDataReply | Response carrying **file fragment** or status. |
-| 0x5000 | ArtDMX | DMX payload **Length** 2–512 bytes (even); **Sequence**; **Physical**; **15-bit** Port-Address (not always full 512 slots). |
-| 0x5100 | ArtNzs | **Non-zero start code** DMX (RDM, text, etc.—**NZS**). |
-| 0x5200 | ArtSync | **Synchronised** output: nodes compare **ArtSync** source IP to the **most recent ArtDMX** source IP **for that synchronisation domain** (not an arbitrary pairing). |
-| 0x6000 | ArtAddress | Remote programming: **Port Name** + **Long Name** (per PDF), **Net/Sub**, merge/RDM flags, **Command** nibble. |
-| 0x7000 | ArtInput | Controller advertises **input** port levels to the network. |
-| 0x8000 | ArtTodRequest | Request **RDM TOD** for a universe. |
-| 0x8100 | ArtTodData | **TOD** publish (often broadcast). |
-| 0x8200 | ArtTodControl | **TOD** maintenance (flush, etc.). |
-| 0x8300 | ArtRdm | **RDM** tunnel; same OpCode for request/response (inner RDM differs). |
-| 0x8400 | ArtRdmSub | **Sub-device** RDM path. |
-| 0x9000 | ArtMedia | **Media** streaming (general). |
-| 0x9100 | ArtMediaPatch | **Media** patch / mapping. |
-| 0x9200 | ArtMediaControl | **Media** control. |
-| 0x9300 | ArtMediaContrlReply | **Media** control reply. |
-| 0x9700 | ArtTimeCode | **SMPTE / EBU** timecode distribution. |
-| 0x9800 | ArtTimeSync | **Time sync** / wall-clock alignment (distinct from **ArtSync** 0x5200). |
-| 0x9900 | ArtTrigger | **Show control** / macro triggers. |
-| 0x9A00 | ArtDirectory | **Directory** request (list assets). |
-| 0x9B00 | ArtDirectoryReply | **Directory** response. |
-| 0xA010 | ArtVideoSetup | **Pixel mapping** / video setup. |
-| 0xA020 | ArtVideoPalette | **Palette** data. |
-| 0xA040 | ArtVideoData | **Video** frame payload. |
-| 0xF000 | ArtMacMaster | **Remote MAC** / identification programming (master). |
-| 0xF100 | ArtMacSlave | **Remote MAC** (slave reply). |
-| 0xF200 | ArtFirmwareMaster | **Firmware upload** (master). |
-| 0xF300 | ArtFirmwareReply | **Firmware** reply / progress. |
-| 0xF400 | ArtFileTnMaster | **File transfer** (Tn). |
-| 0xF500 | ArtFileFnMaster | **File transfer** (Fn). |
-| 0xF600 | ArtFileFnReply | **File transfer** reply. |
-| 0xF800 | ArtIpProg | **IP / DHCP** programming. |
-| 0xF900 | ArtIpProgReply | **IP programming** reply. |
+| OpCode (LE) | Name                | Spec domain / role (summary)                                                                                                                                         |
+| ----------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0x2000      | ArtPoll             | Discovery; **TalkToMe** flags (e.g. reply-on-change, diagnostics, **targeted** poll with port/OEM filters).                                                          |
+| 0x2100      | ArtPollReply        | Node identity; **Bind Index**; **Port Name** (per-port label, spec) and **Long Name**; port types; **15-bit** address fields (**Net**, **SubUni**).                  |
+| 0x2300      | ArtDiagData         | **Diagnostics** text stream to controllers (priority, UTF-8 payload).                                                                                                |
+| 0x2400      | ArtCommand          | **OEM / remote** text command channel.                                                                                                                               |
+| 0x2700      | ArtDataRequest      | Request **OEM file / blob** data (paired with **ArtDataReply**).                                                                                                     |
+| 0x2800      | ArtDataReply        | Response carrying **file fragment** or status.                                                                                                                       |
+| 0x5000      | ArtDMX              | DMX payload **Length** 2–512 bytes (even); **Sequence**; **Physical**; **15-bit** Port-Address (not always full 512 slots).                                          |
+| 0x5100      | ArtNzs              | **Non-zero start code** DMX (RDM, text, etc.—**NZS**).                                                                                                               |
+| 0x5200      | ArtSync             | **Synchronised** output: nodes compare **ArtSync** source IP to the **most recent ArtDMX** source IP **for that synchronisation domain** (not an arbitrary pairing). |
+| 0x6000      | ArtAddress          | Remote programming: **Port Name** + **Long Name** (per PDF), **Net/Sub**, merge/RDM flags, **Command** nibble.                                                       |
+| 0x7000      | ArtInput            | Controller advertises **input** port levels to the network.                                                                                                          |
+| 0x8000      | ArtTodRequest       | Request **RDM TOD** for a universe.                                                                                                                                  |
+| 0x8100      | ArtTodData          | **TOD** publish (often broadcast).                                                                                                                                   |
+| 0x8200      | ArtTodControl       | **TOD** maintenance (flush, etc.).                                                                                                                                   |
+| 0x8300      | ArtRdm              | **RDM** tunnel; same OpCode for request/response (inner RDM differs).                                                                                                |
+| 0x8400      | ArtRdmSub           | **Sub-device** RDM path.                                                                                                                                             |
+| 0x9000      | ArtMedia            | **Media** streaming (general).                                                                                                                                       |
+| 0x9100      | ArtMediaPatch       | **Media** patch / mapping.                                                                                                                                           |
+| 0x9200      | ArtMediaControl     | **Media** control.                                                                                                                                                   |
+| 0x9300      | ArtMediaContrlReply | **Media** control reply.                                                                                                                                             |
+| 0x9700      | ArtTimeCode         | **SMPTE / EBU** timecode distribution.                                                                                                                               |
+| 0x9800      | ArtTimeSync         | **Time sync** / wall-clock alignment (distinct from **ArtSync** 0x5200).                                                                                             |
+| 0x9900      | ArtTrigger          | **Show control** / macro triggers.                                                                                                                                   |
+| 0x9A00      | ArtDirectory        | **Directory** request (list assets).                                                                                                                                 |
+| 0x9B00      | ArtDirectoryReply   | **Directory** response.                                                                                                                                              |
+| 0xA010      | ArtVideoSetup       | **Pixel mapping** / video setup.                                                                                                                                     |
+| 0xA020      | ArtVideoPalette     | **Palette** data.                                                                                                                                                    |
+| 0xA040      | ArtVideoData        | **Video** frame payload.                                                                                                                                             |
+| 0xF000      | ArtMacMaster        | **Remote MAC** / identification programming (master).                                                                                                                |
+| 0xF100      | ArtMacSlave         | **Remote MAC** (slave reply).                                                                                                                                        |
+| 0xF200      | ArtFirmwareMaster   | **Firmware upload** (master).                                                                                                                                        |
+| 0xF300      | ArtFirmwareReply    | **Firmware** reply / progress.                                                                                                                                       |
+| 0xF400      | ArtFileTnMaster     | **File transfer** (Tn).                                                                                                                                              |
+| 0xF500      | ArtFileFnMaster     | **File transfer** (Fn).                                                                                                                                              |
+| 0xF600      | ArtFileFnReply      | **File transfer** reply.                                                                                                                                             |
+| 0xF800      | ArtIpProg           | **IP / DHCP** programming.                                                                                                                                           |
+| 0xF900      | ArtIpProgReply      | **IP programming** reply.                                                                                                                                            |
 
 **Spec transport rules (PDF / common implementation practice):**
 
@@ -122,21 +116,21 @@ The following **matches `lumenflow_core::artnet::OpCode`** (the crate’s suppor
 
 These items are spelled out in the specification text; they were **not** fully captured in §1 pcaps alone.
 
-| Theme | Spec pattern (summary) |
-|-------|-------------------------|
-| **Kiloverse** | A **Kiloverse** is a group of **1024** universes (terminology section). |
-| **ArtPoll timing** | Controllers should send **ArtPoll** every **2.5–3 s**; assume **≤ 3 s** timeout waiting for **ArtPollReply** before treating a node as disconnected. **Valid ArtPoll** length is **≥ 14 bytes** (missing fields zero). |
-| **ArtPollReply delay** | Node should wait **random 0–1 s** before sending **ArtPollReply** (reduces broadcast bunching). |
-| **Controller self-reply** | The controller that broadcasts **ArtPoll** should also **unicast ArtPollReply to itself** (spec requirement). |
-| **Multiple controllers + diagnostics** | If any controller requests diagnostics, the node sends diagnostics; if several do, diagnostics are **broadcast**; use **lowest** **DiagPriority**; ignore unicast-diag flag when multiple controllers conflict (see **ArtPoll** flags). |
-| **ArtDMX transport** | **ArtDmx** must be **unicast** to **subscribers** of that universe; **broadcast ArtDmx is not allowed**. If **no subscribers**, the controller **shall not** send **ArtDmx**. Subscribers advertise universes in **SwIn** / **SwOut** in **ArtPollReply**; transmitters **poll** to detect subscription changes. |
-| **Input retransmit** | Active non-changing DMX input re-sends last **ArtDmx** about every **4 s** (spec); **800 ms–1000 ms** recommended to align Art-Net with **sACN** convergence. |
-| **RefreshRate** | **ArtPollReply** **RefreshRate** declares the **maximum** rate a gateway can accept **ArtDmx** (DMX-out often **44 Hz**; non-DMX gateways may be higher). |
-| **Merge** | Two **ArtDmx** sources to the same **Port-Address** (different IP or same IP different **Physical**) → **merge**; **GoodOutput** bit 3 set; **LTP/HTP** via **ArtAddress**; **at most two** sources; exit via **AcCancelMerge** and rules in §4.5. |
-| **ArtVlc** | **ArtVlc** is **not** a separate OpCode in Table 1—it is a **specific use** of **ArtNzs** (**OpNzs 0x5100**) for **VLC** payloads (Visible Light Communication). **ArtPoll** flag enables/disables VLC transmission. |
-| **OpMacMaster/Slave** | Table 1 marks **0xF000** / **0xF100** as **deprecated**. |
-| **NodeReport** | **ArtPollReply** **NodeReport** carries status (e.g. **RcShNameOk** / **RcLoNameOk** confirm **ArtAddress** programming success for Port Name / Long Name). See §4.19. |
-| **Style codes** | **ArtPollReply** **Style**: e.g. **StNode**, **StController**, **StMedia**, **StRoute**, **StBackup**, **StConfig**, **StVisual**—device class hint for controllers. |
+| Theme                                  | Spec pattern (summary)                                                                                                                                                                                                                                                                                           |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kiloverse**                          | A **Kiloverse** is a group of **1024** universes (terminology section).                                                                                                                                                                                                                                          |
+| **ArtPoll timing**                     | Controllers should send **ArtPoll** every **2.5–3 s**; assume **≤ 3 s** timeout waiting for **ArtPollReply** before treating a node as disconnected. **Valid ArtPoll** length is **≥ 14 bytes** (missing fields zero).                                                                                           |
+| **ArtPollReply delay**                 | Node should wait **random 0–1 s** before sending **ArtPollReply** (reduces broadcast bunching).                                                                                                                                                                                                                  |
+| **Controller self-reply**              | The controller that broadcasts **ArtPoll** should also **unicast ArtPollReply to itself** (spec requirement).                                                                                                                                                                                                    |
+| **Multiple controllers + diagnostics** | If any controller requests diagnostics, the node sends diagnostics; if several do, diagnostics are **broadcast**; use **lowest** **DiagPriority**; ignore unicast-diag flag when multiple controllers conflict (see **ArtPoll** flags).                                                                          |
+| **ArtDMX transport**                   | **ArtDmx** must be **unicast** to **subscribers** of that universe; **broadcast ArtDmx is not allowed**. If **no subscribers**, the controller **shall not** send **ArtDmx**. Subscribers advertise universes in **SwIn** / **SwOut** in **ArtPollReply**; transmitters **poll** to detect subscription changes. |
+| **Input retransmit**                   | Active non-changing DMX input re-sends last **ArtDmx** about every **4 s** (spec); **800 ms–1000 ms** recommended to align Art-Net with **sACN** convergence.                                                                                                                                                    |
+| **RefreshRate**                        | **ArtPollReply** **RefreshRate** declares the **maximum** rate a gateway can accept **ArtDmx** (DMX-out often **44 Hz**; non-DMX gateways may be higher).                                                                                                                                                        |
+| **Merge**                              | Two **ArtDmx** sources to the same **Port-Address** (different IP or same IP different **Physical**) → **merge**; **GoodOutput** bit 3 set; **LTP/HTP** via **ArtAddress**; **at most two** sources; exit via **AcCancelMerge** and rules in §4.5.                                                               |
+| **ArtVlc**                             | **ArtVlc** is **not** a separate OpCode in Table 1—it is a **specific use** of **ArtNzs** (**OpNzs 0x5100**) for **VLC** payloads (Visible Light Communication). **ArtPoll** flag enables/disables VLC transmission.                                                                                             |
+| **OpMacMaster/Slave**                  | Table 1 marks **0xF000** / **0xF100** as **deprecated**.                                                                                                                                                                                                                                                         |
+| **NodeReport**                         | **ArtPollReply** **NodeReport** carries status (e.g. **RcShNameOk** / **RcLoNameOk** confirm **ArtAddress** programming success for Port Name / Long Name). See §4.19.                                                                                                                                           |
+| **Style codes**                        | **ArtPollReply** **Style**: e.g. **StNode**, **StController**, **StMedia**, **StRoute**, **StBackup**, **StConfig**, **StVisual**—device class hint for controllers.                                                                                                                                             |
 
 ---
 
@@ -213,8 +207,6 @@ flowchart TB
   discovery --> dmx
 ```
 
-
-
 **DMXW_03 timeline (typical):** Poll → 8× PollReply → TOD loop → heavy ArtAddress → ArtRdm → sparse ArtDMX; **ArtPoll** repeats.
 
 **DMXW_02 timeline (typical):** Poll → 8× PollReply → TOD/IP probe → sustained **ArtDMX** + **ArtSync**; **ArtAddress** appears later in the file.
@@ -242,11 +234,11 @@ Each pattern uses the same structure: **function → description → call → re
 
 - **Response packet(s)**
 
-  | Field    | Value (typical)                                                                                   |
-  | -------- | ------------------------------------------------------------------------------------------------- |
-  | Sender   | Node (e.g. **2.0.0.11**)                                                                          |
-  | Receiver | Often same broadcast as poll; may be **unicast** to controller                                    |
-  | Type     | **ArtPollReply** (0x2100), **one per Bind Index**                                                 |
+  | Field    | Value (typical)                                                                                                                                    |
+  | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Sender   | Node (e.g. **2.0.0.11**)                                                                                                                           |
+  | Receiver | Often same broadcast as poll; may be **unicast** to controller                                                                                     |
+  | Type     | **ArtPollReply** (0x2100), **one per Bind Index**                                                                                                  |
   | Data     | **Port Name** (spec; often shown as “Short Name” in Wireshark), **Long Name**, **Bind Index**, **NumPorts**, **SwIn/SwOut**, MAC, **Status**, etc. |
 
 - **Successful outcome:** At least one **ArtPollReply** with valid header (**Art-Net\0**, OpCode **0x2100**) and expected **Bind Index** range for the device class.
@@ -260,18 +252,18 @@ Each pattern uses the same structure: **function → description → call → re
 - **Description:** The controller programs **Port Name** and/or **Long Name** using **ArtAddress** (the PDF states **ArtAddress** is used to program the **Port Name** string). Use **Bind Index** to select the **root** vs **port** context. The wire protocol **does not define** an Art-Net ACK. Verify by sending **ArtPoll** again and checking **ArtPollReply**, or the device’s front panel.
 - **Call packet**
 
-  | Field    | Value (typical)                                                                                                                                        |
-  | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-  | Sender   | Controller                                                                                                                                             |
-  | Receiver | Node **unicast** IP                                                                                                                                    |
-  | Type     | **ArtAddress** (0x6000)                                                                                                                                |
+  | Field    | Value (typical)                                                                                                                                                                                                 |
+  | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Sender   | Controller                                                                                                                                                                                                      |
+  | Receiver | Node **unicast** IP                                                                                                                                                                                             |
+  | Type     | **ArtAddress** (0x6000)                                                                                                                                                                                         |
   | Data     | **Bind Index**, **Port Name** (18-byte field; `short_name` in **`build_art_address`**), **Long Name**, **Input/Output Subswitch** nibbles, **Command** (e.g. set direction, no-action), **sACN Priority**, etc. |
 
 - **Response packet**
 
   | Field            | Value                                                                                                                                         |
   | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-  | *Immediate*      | **None** on the wire (not part of Art-Net 4 as a mandatory paired reply).                                                                     |
+  | _Immediate_      | **None** on the wire (not part of Art-Net 4 as a mandatory paired reply).                                                                     |
   | **Verification** | Subsequent **ArtPoll** → **ArtPollReply** where **Long Name** / **Port Name** reflect the programmed strings if the node accepted the change. |
 
 - **Successful outcome:** A later **ArtPollReply** shows the **new** **Port Name** / **Long Name**; optionally **NodeReport** **RcShNameOk** / **RcLoNameOk** (§4.19)—**not all** nodes emit these codes.
@@ -338,7 +330,7 @@ Each pattern uses the same structure: **function → description → call → re
 
 - **Description:** The controller sends **ArtDMX** (**OpOutput / OpDmx 0x5000**) with **15-bit Port-Address**, **Length** (even, 2–512 bytes of channel data), **Sequence**, and **Physical**. The node maps data to the DMX output for that universe; there is **no** Art-Net application ACK.
 
-- **Unicast subscription (spec):** **ArtDmx** must be **unicast** to devices that **subscribe** to that universe. Subscribers list universes in **SwIn** / **SwOut** in **ArtPollReply**; the transmitter **polls** so subscription changes are discovered. If **no** node subscribes to a universe, the controller **shall not** send **ArtDmx** for it. **Broadcast ArtDmx is not allowed** (`docs/art-net4.txt`, ArtDmx packet strategy). *(Lab captures may still show unicast to a known node, which matches this behaviour.)*
+- **Unicast subscription (spec):** **ArtDmx** must be **unicast** to devices that **subscribe** to that universe. Subscribers list universes in **SwIn** / **SwOut** in **ArtPollReply**; the transmitter **polls** so subscription changes are discovered. If **no** node subscribes to a universe, the controller **shall not** send **ArtDmx** for it. **Broadcast ArtDmx is not allowed** (`docs/art-net4.txt`, ArtDmx packet strategy). _(Lab captures may still show unicast to a known node, which matches this behaviour.)_
 
 - **Sequence:** **0x00** disables re-ordering; **0x01–0xFF** increments so receivers can re-sequence over lossy paths.
 
@@ -352,19 +344,19 @@ Each pattern uses the same structure: **function → description → call → re
 
 - **Call packet**
 
-  | Field    | Value (DMXW_02 / DMXW_03)                                            |
-  | -------- | -------------------------------------------------------------------- |
-  | Sender   | Controller (**2.0.0.102**)                                           |
-  | Receiver | Node **unicast** (**2.0.0.11**) — DMXW_02: **all** ArtDMX to unicast |
-  | Type     | **ArtDMX** (0x5000)                                                  |
+  | Field    | Value (DMXW_02 / DMXW_03)                                                                 |
+  | -------- | ----------------------------------------------------------------------------------------- |
+  | Sender   | Controller (**2.0.0.102**)                                                                |
+  | Receiver | Node **unicast** (**2.0.0.11**) — DMXW_02: **all** ArtDMX to unicast                      |
+  | Type     | **ArtDMX** (0x5000)                                                                       |
   | Data     | **Sequence**, **Physical**, **SubUni** / **Net** (Port-Address), **Length**, DMX **Data** |
 
 - **Response packet**
 
   | Field      | Value                                        |
   | ---------- | -------------------------------------------- |
-  | *Art-Net*  | **None**                                     |
-  | *Physical* | DMX **output** on port (not visible in pcap) |
+  | _Art-Net_  | **None**                                     |
+  | _Physical_ | DMX **output** on port (not visible in pcap) |
 
 - **Successful outcome:** Stable stream; subscription satisfied; merge state reflected in **ArtPollReply** if applicable.
 - **Unsuccessful outcome:** Wrong universe mapping; sequence gaps; violation of unicast-only rule on some networks; no electrical DMX (out of scope for capture).
@@ -422,14 +414,12 @@ Each pattern uses the same structure: **function → description → call → re
 
 Short reference for opcodes **not** heavily exercised on Swisson in these files:
 
-
 | Function                    | Call (127.0.0.1)            | Typical role                                                   | Core API                                   |
 | --------------------------- | --------------------------- | -------------------------------------------------------------- | ------------------------------------------ |
 | **OEM / text command**      | **ArtCommand** (0x2400)     | Vendor-specific remote commands                                | `build_art_command`, parse                 |
 | **Controller input state**  | **ArtInput** (0x7000)       | Report DMX **input** ports to network                          | parse / build                              |
 | **Show trigger**            | **ArtTrigger** (0x9900)     | Macro / cue triggers                                           | `build_art_trigger`, parse                 |
 | **File / OEM data request** | **ArtDataRequest** (0x2700) | Request blob; expect **ArtDataReply** (0x2800) on real devices | `build_art_data_request`, parse reply path |
-
 
 - **Successful outcome (tests):** Parser accepts the captured payloads without `UnknownOpCode`.
 - **Unsuccessful outcome:** `Unimplemented` in core dispatch until handlers are wired.
@@ -509,7 +499,7 @@ Short reference for opcodes **not** heavily exercised on Swisson in these files:
 
 ---
 
-### 4.17 Remote maintenance (ArtMac*, ArtFirmware*, ArtFile* — 0xF000–0xF600)
+### 4.17 Remote maintenance (ArtMac*, ArtFirmware*, ArtFile\* — 0xF000–0xF600)
 
 - **Description:** **MAC** programming (**F000/F100**), **firmware upload** (**F200/F300**), **file transfer** (**F400–F600**)—maintenance windows, often with **strict** pairing and **timeouts**.
 - **Pattern:** **Master** command → **Reply** with **progress** / **ack**; may require **session** state on controller.
@@ -546,27 +536,25 @@ Short reference for opcodes **not** heavily exercised on Swisson in these files:
 
 ## 5. Abstract patterns (quick reference)
 
-
-| Pattern | Art-Net realization | Typical direction |
-|--------|---------------------|-------------------|
-| **Discovery ping** | ArtPoll | IPv4 **broadcast** → **ArtPollReply** **unicast** (Art-Net 4: **ArtPollReply broadcast not allowed**; old captures may still show broadcast) |
-| **Fan-out identity** | Multiple **ArtPollReply** by **Bind Index** | One NIC IP → many logical ports |
-| **Config write + verify** | ArtAddress → *(no ACK)* → ArtPoll / ArtPollReply | **Poll-after-write** for authoritative state |
-| **TOD publish** | ArtTodRequest / ArtTodData | Request **unicast**; data **broadcast** |
-| **RDM tunnel** | ArtRdm / ArtRdmSub | **Unicast** both ways; same outer OpCode; inner RDM differs |
-| **Stream + frame sync** | ArtDMX + ArtSync | Match **ArtSync** IP to **most recent ArtDmx** IP; **ignore ArtSync** while **merging** **ArtDmx** from **different** IPs (spec) |
-| **Timecode / time sync** | ArtTimeCode / ArtTimeSync | **Broadcast** or **unicast**; semantics per PDF (not the same as **ArtSync**) |
-| **NZS stream** | ArtNzs | Like DMX path but **non-zero** start code |
-| **Diagnostics feed** | ArtDiagData | **Unicast** or **broadcast**; firehose text |
-| **OEM blob transfer** | ArtDataRequest / ArtDataReply | **Unicast** **request/response** with fragments |
-| **Maintenance session** | Firmware / File / Mac masters | **Unicast** **command/reply** until complete |
-| **Media / video** | Media 0x90xx, Video 0xA0xx | Mixed **unicast**/**broadcast** by implementation |
-| **Unicast DMX subscription** | ArtDmx → subscribed nodes only | **Unicast** only; no subscribers ⇒ no send |
-| **DMX merge** | Two ArtDmx sources + ArtAddress LTP/HTP | **GoodOutput** bit 3; max **two** sources |
-| **Controller discovery** | ArtPoll 2.5–3 s, self ArtPollReply | **Targeted** optional; **≤3 s** reply timeout |
-| **Programming ack** | ArtPollReply NodeReport | **RcShNameOk** / **RcLoNameOk** |
-| **Keepalive** | Periodic ArtPoll (2.5–3 s) | Discovery; distinct from **ArtDmx** input **retransmit** (~800 ms–1 s / ~4 s in spec) |
-
+| Pattern                      | Art-Net realization                              | Typical direction                                                                                                                            |
+| ---------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Discovery ping**           | ArtPoll                                          | IPv4 **broadcast** → **ArtPollReply** **unicast** (Art-Net 4: **ArtPollReply broadcast not allowed**; old captures may still show broadcast) |
+| **Fan-out identity**         | Multiple **ArtPollReply** by **Bind Index**      | One NIC IP → many logical ports                                                                                                              |
+| **Config write + verify**    | ArtAddress → _(no ACK)_ → ArtPoll / ArtPollReply | **Poll-after-write** for authoritative state                                                                                                 |
+| **TOD publish**              | ArtTodRequest / ArtTodData                       | Request **unicast**; data **broadcast**                                                                                                      |
+| **RDM tunnel**               | ArtRdm / ArtRdmSub                               | **Unicast** both ways; same outer OpCode; inner RDM differs                                                                                  |
+| **Stream + frame sync**      | ArtDMX + ArtSync                                 | Match **ArtSync** IP to **most recent ArtDmx** IP; **ignore ArtSync** while **merging** **ArtDmx** from **different** IPs (spec)             |
+| **Timecode / time sync**     | ArtTimeCode / ArtTimeSync                        | **Broadcast** or **unicast**; semantics per PDF (not the same as **ArtSync**)                                                                |
+| **NZS stream**               | ArtNzs                                           | Like DMX path but **non-zero** start code                                                                                                    |
+| **Diagnostics feed**         | ArtDiagData                                      | **Unicast** or **broadcast**; firehose text                                                                                                  |
+| **OEM blob transfer**        | ArtDataRequest / ArtDataReply                    | **Unicast** **request/response** with fragments                                                                                              |
+| **Maintenance session**      | Firmware / File / Mac masters                    | **Unicast** **command/reply** until complete                                                                                                 |
+| **Media / video**            | Media 0x90xx, Video 0xA0xx                       | Mixed **unicast**/**broadcast** by implementation                                                                                            |
+| **Unicast DMX subscription** | ArtDmx → subscribed nodes only                   | **Unicast** only; no subscribers ⇒ no send                                                                                                   |
+| **DMX merge**                | Two ArtDmx sources + ArtAddress LTP/HTP          | **GoodOutput** bit 3; max **two** sources                                                                                                    |
+| **Controller discovery**     | ArtPoll 2.5–3 s, self ArtPollReply               | **Targeted** optional; **≤3 s** reply timeout                                                                                                |
+| **Programming ack**          | ArtPollReply NodeReport                          | **RcShNameOk** / **RcLoNameOk**                                                                                                              |
+| **Keepalive**                | Periodic ArtPoll (2.5–3 s)                       | Discovery; distinct from **ArtDmx** input **retransmit** (~800 ms–1 s / ~4 s in spec)                                                        |
 
 ---
 
@@ -609,4 +597,4 @@ Art-Net is not **Turing-complete**. Below is **operational inference** from trac
 
 ---
 
-*Sources: `tshark` on the captures in §0; opcode taxonomy aligned with `lumenflow_core::artnet::OpCode` and Art-Net 4 (`docs/art-net4.txt` / PDF).*
+_Sources: `tshark` on the captures in §0; opcode taxonomy aligned with `lumenflow_core::artnet::OpCode` and Art-Net 4 (`docs/art-net4.txt` / PDF)._

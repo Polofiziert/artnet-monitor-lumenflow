@@ -157,7 +157,9 @@ const App: Component = () => {
   const universeMetrics = useUniverseMetrics();
   const routeInfo = useRouteInfo();
   const [windowVisible, setWindowVisible] = createSignal(
-    typeof document !== "undefined" ? document.visibilityState === "visible" : true
+    typeof document !== "undefined"
+      ? document.visibilityState === "visible"
+      : true
   );
   const realDevicesStore = useDevices({
     enabled: () => !isMockMode(),
@@ -371,7 +373,9 @@ const App: Component = () => {
     const onVisibility = () =>
       setWindowVisible(document.visibilityState === "visible");
     document.addEventListener("visibilitychange", onVisibility);
-    onCleanup(() => document.removeEventListener("visibilitychange", onVisibility));
+    onCleanup(() =>
+      document.removeEventListener("visibilitychange", onVisibility)
+    );
   });
 
   onCleanup(() => {
@@ -437,9 +441,12 @@ const App: Component = () => {
 
     if (status === "warning") {
       const reasons: string[] = [];
-      if (flickerCount > 4) reasons.push(`- Flickering channels: ${flickerCount} (> 4)`);
+      if (flickerCount > 4)
+        reasons.push(`- Flickering channels: ${flickerCount} (> 4)`);
       if (lastJitter > 30)
-        reasons.push(`- Last inter-packet jitter: ${lastJitter.toFixed(1)} ms (> 30 ms)`);
+        reasons.push(
+          `- Last inter-packet jitter: ${lastJitter.toFixed(1)} ms (> 30 ms)`
+        );
 
       return [
         "System status: WARNING",
@@ -986,10 +993,7 @@ const App: Component = () => {
 
       {/* Help panel (native Help menu) */}
       <Show when={helpOpen()}>
-        <HelpPanel
-          section={helpSection}
-          onClose={() => setHelpOpen(false)}
-        />
+        <HelpPanel section={helpSection} onClose={() => setHelpOpen(false)} />
       </Show>
     </div>
   );

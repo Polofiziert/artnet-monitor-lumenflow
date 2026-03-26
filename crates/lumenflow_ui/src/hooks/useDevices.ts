@@ -48,7 +48,8 @@ let cacheProducts: ArtNetProductDto[] = [];
 let cacheUpdatedAt = 0;
 
 export function useDevices(options: UseDevicesOptions) {
-  const [products, setProducts] = createSignal<ArtNetProductDto[]>(cacheProducts);
+  const [products, setProducts] =
+    createSignal<ArtNetProductDto[]>(cacheProducts);
   const [pollReplyActivity, setPollReplyActivity] = createStore<
     Record<string, PollReplyActivity>
   >({});
@@ -129,22 +130,25 @@ export function useDevices(options: UseDevicesOptions) {
     if (!options.enabled()) return;
     let unlisten: (() => void) | undefined;
     let disposed = false;
-    listen<DevicePollReplyActivityEvent>("device-poll-reply-activity", (evt) => {
-      const payload = evt.payload;
-      if (!payload || !payload.product_id) return;
-      const receivedAtMs = Math.floor(payload.received_at_nanos / 1_000_000);
-      const prior = pollReplyActivity[payload.product_id];
-      setPollReplyActivity(payload.product_id, {
-        pulseNonce: (prior?.pulseNonce ?? 0) + 1,
-        lastReceivedAtMs: receivedAtMs,
-        lastBindIndex: payload.bind_index,
-        ipAddress: payload.ip_address,
-        bindIp: payload.bind_ip,
-        shortName: payload.short_name,
-        bundleWindowMs: payload.bundle_window_ms,
-        bundleCount: (prior?.bundleCount ?? 0) + 1,
-      });
-    })
+    listen<DevicePollReplyActivityEvent>(
+      "device-poll-reply-activity",
+      (evt) => {
+        const payload = evt.payload;
+        if (!payload || !payload.product_id) return;
+        const receivedAtMs = Math.floor(payload.received_at_nanos / 1_000_000);
+        const prior = pollReplyActivity[payload.product_id];
+        setPollReplyActivity(payload.product_id, {
+          pulseNonce: (prior?.pulseNonce ?? 0) + 1,
+          lastReceivedAtMs: receivedAtMs,
+          lastBindIndex: payload.bind_index,
+          ipAddress: payload.ip_address,
+          bindIp: payload.bind_ip,
+          shortName: payload.short_name,
+          bundleWindowMs: payload.bundle_window_ms,
+          bundleCount: (prior?.bundleCount ?? 0) + 1,
+        });
+      }
+    )
       .then((fn) => {
         if (disposed) {
           fn();

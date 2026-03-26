@@ -1,5 +1,13 @@
 import type { Component } from "solid-js";
-import { createSignal, createMemo, createEffect, For, Show, Index, onCleanup } from "solid-js";
+import {
+  createSignal,
+  createMemo,
+  createEffect,
+  For,
+  Show,
+  Index,
+  onCleanup,
+} from "solid-js";
 import { open } from "@tauri-apps/plugin-shell";
 import { invoke } from "@tauri-apps/api/core";
 import type { IpProgReplyDto } from "./IpProgDialog";
@@ -155,7 +163,8 @@ function parsePortAddress(input: string): { value?: number; error?: string } {
     return { value: v };
   }
   const parts = s.split(":").map((p) => p.trim());
-  if (parts.length !== 3) return { error: "Expected Net:SubNet:Universe (e.g. 0:0:1)." };
+  if (parts.length !== 3)
+    return { error: "Expected Net:SubNet:Universe (e.g. 0:0:1)." };
   const [netS, subS, uniS] = parts;
   const net = Number(netS);
   const sub = Number(subS);
@@ -174,11 +183,15 @@ function hex(value: number, width = 2): string {
 }
 
 const DeviceList: Component<DeviceListProps> = (props) => {
-  const [selectedProductId, setSelectedProductId] = createSignal<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = createSignal<string | null>(
+    null
+  );
   const [filter, setFilter] = createSignal("");
   const [deviceFilter, setDeviceFilter] = createSignal<DeviceFilter>("all");
   const [detailTab, setDetailTab] = createSignal<DeviceTab>("overview");
-  const [deviceUrls, setDeviceUrls] = createSignal<Record<string, DeviceUrls>>({});
+  const [deviceUrls, setDeviceUrls] = createSignal<Record<string, DeviceUrls>>(
+    {}
+  );
   const [addDeviceOpen, setAddDeviceOpen] = createSignal(false);
   const [addDeviceIp, setAddDeviceIp] = createSignal("");
   const [addDeviceName, setAddDeviceName] = createSignal("");
@@ -193,13 +206,21 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   // - "in:<bind>:<slot>" for input universe
   const [editingPortKey, setEditingPortKey] = createSignal<string | null>(null);
   const [editingValue, setEditingValue] = createSignal("");
-  const [pendingEdits, setPendingEdits] = createSignal<Record<string, PendingEdit>>({});
-  const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>({});
-  const [fieldLoading, setFieldLoading] = createSignal<Record<string, boolean>>({});
+  const [pendingEdits, setPendingEdits] = createSignal<
+    Record<string, PendingEdit>
+  >({});
+  const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>(
+    {}
+  );
+  const [fieldLoading, setFieldLoading] = createSignal<Record<string, boolean>>(
+    {}
+  );
   const [ipProgByProductId, setIpProgByProductId] = createSignal<
     Record<string, { reply: IpProgReplyDto; receivedAtMs: number }>
   >({});
-  const [controllersSeen, setControllersSeen] = createSignal<ControllerSeenDto[]>([]);
+  const [controllersSeen, setControllersSeen] = createSignal<
+    ControllerSeenDto[]
+  >([]);
   const log = useDiagLog();
 
   createEffect(() => {
@@ -238,7 +259,8 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       .filter((d) => {
         if (deviceFilter() === "online" && d.online === false) return false;
         if (deviceFilter() === "offline" && d.online !== false) return false;
-        if (deviceFilter() === "manual" && d.long_name !== "Manual entry") return false;
+        if (deviceFilter() === "manual" && d.long_name !== "Manual entry")
+          return false;
         if (!q) return true;
         return (
           d.short_name.toLowerCase().includes(q) ||
@@ -272,8 +294,12 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     return map;
   });
 
-  const connectedDevices = createMemo(() => filteredDevices().filter((d) => d.online !== false));
-  const previouslySeenDevices = createMemo(() => filteredDevices().filter((d) => d.online === false));
+  const connectedDevices = createMemo(() =>
+    filteredDevices().filter((d) => d.online !== false)
+  );
+  const previouslySeenDevices = createMemo(() =>
+    filteredDevices().filter((d) => d.online === false)
+  );
 
   const selectedDevice = createMemo(() => {
     const id = selectedProductId();
@@ -282,7 +308,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   });
 
   const selectedPollBundleCount = () =>
-    selectedDevice() ? (pollActivityFor(selectedDevice()!.product_id)?.bundleCount ?? 0) : 0;
+    selectedDevice()
+      ? (pollActivityFor(selectedDevice()!.product_id)?.bundleCount ?? 0)
+      : 0;
 
   const beginEdit = (key: string, currentValue: string) => {
     // Clear stale errors when starting a new edit, otherwise a prior failure (e.g. ArtIpProg)
@@ -307,7 +335,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     productId: string,
     field: EditableField,
     expectedValue: string,
-    baselineValue: string,
+    baselineValue: string
   ) => {
     setPendingEdits((prev) => ({
       ...prev,
@@ -371,24 +399,30 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     const fromCore = await import("@tauri-apps/api/core");
     try {
       const [product_url, user_guide, support] = await Promise.all([
-        fromCore.invoke<string>("request_device_url", {
-          target_ip: ip,
-          esta_man: device.esta_man,
-          oem: device.oem_code,
-          request_type: DR_URL_PRODUCT,
-        }).catch(() => undefined),
-        fromCore.invoke<string>("request_device_url", {
-          target_ip: ip,
-          esta_man: device.esta_man,
-          oem: device.oem_code,
-          request_type: DR_URL_USER_GUIDE,
-        }).catch(() => undefined),
-        fromCore.invoke<string>("request_device_url", {
-          target_ip: ip,
-          esta_man: device.esta_man,
-          oem: device.oem_code,
-          request_type: DR_URL_SUPPORT,
-        }).catch(() => undefined),
+        fromCore
+          .invoke<string>("request_device_url", {
+            target_ip: ip,
+            esta_man: device.esta_man,
+            oem: device.oem_code,
+            request_type: DR_URL_PRODUCT,
+          })
+          .catch(() => undefined),
+        fromCore
+          .invoke<string>("request_device_url", {
+            target_ip: ip,
+            esta_man: device.esta_man,
+            oem: device.oem_code,
+            request_type: DR_URL_USER_GUIDE,
+          })
+          .catch(() => undefined),
+        fromCore
+          .invoke<string>("request_device_url", {
+            target_ip: ip,
+            esta_man: device.esta_man,
+            oem: device.oem_code,
+            request_type: DR_URL_SUPPORT,
+          })
+          .catch(() => undefined),
       ]);
 
       const urls: DeviceUrls = { loading: false };
@@ -505,7 +539,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
   const submitIpProgField = async (
     device: ArtNetProductDto,
-    field: "subnet_mask" | "gateway" | "port",
+    field: "subnet_mask" | "gateway" | "port"
   ) => {
     const key = `ipprog_${field}:${device.product_id}`;
     setFieldErrors((prev) => ({ ...prev, [key]: "" }));
@@ -514,7 +548,10 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       setFieldErrors((prev) => ({ ...prev, [key]: "Value is required." }));
       return;
     }
-    if ((field === "subnet_mask" || field === "gateway") && !isValidIpv4(nextRaw)) {
+    if (
+      (field === "subnet_mask" || field === "gateway") &&
+      !isValidIpv4(nextRaw)
+    ) {
       setFieldErrors((prev) => ({ ...prev, [key]: "Invalid IPv4 address." }));
       return;
     }
@@ -522,7 +559,10 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     if (field === "port") {
       const v = Number(nextRaw);
       if (!Number.isInteger(v) || v < 1 || v > 65535) {
-        setFieldErrors((prev) => ({ ...prev, [key]: "Port must be 1..65535." }));
+        setFieldErrors((prev) => ({
+          ...prev,
+          [key]: "Port must be 1..65535.",
+        }));
         return;
       }
       portValue = v;
@@ -589,7 +629,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
           productId,
           "long_name",
           nextLongName,
-          baselineLongName,
+          baselineLongName
         );
         props.onReadCurrent?.();
       })
@@ -604,7 +644,11 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       });
   };
 
-  const submitPortNameEdit = async (bindIndex: number, slot: number, currentLabel: string) => {
+  const submitPortNameEdit = async (
+    bindIndex: number,
+    slot: number,
+    currentLabel: string
+  ) => {
     const device = selectedDevice();
     if (!device) return;
     const key = portFieldKey(bindIndex, slot);
@@ -630,7 +674,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
           productId,
           "port_name",
           nextPortName,
-          currentLabel,
+          currentLabel
         );
         props.onReadCurrent?.();
       })
@@ -645,7 +689,11 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       });
   };
 
-  const submitPortOutEdit = async (bindIndex: number, slot: number, currentValue: number) => {
+  const submitPortOutEdit = async (
+    bindIndex: number,
+    slot: number,
+    currentValue: number
+  ) => {
     const device = selectedDevice();
     if (!device) return;
     const key = outFieldKey(bindIndex, slot);
@@ -659,7 +707,8 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     if (((nextAddr >> 4) & 0x7ff) !== ((currentValue >> 4) & 0x7ff)) {
       setFieldErrors((prev) => ({
         ...prev,
-        [key]: "Changing Net/SubNet via ArtAddress is not supported yet. Keep Net/SubNet the same and adjust only Universe (last digit).",
+        [key]:
+          "Changing Net/SubNet via ArtAddress is not supported yet. Keep Net/SubNet the same and adjust only Universe (last digit).",
       }));
       return;
     }
@@ -682,7 +731,13 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       },
     })
       .then(() => {
-        markPendingEdit(key, productId, "port_out", String(nextAddr), String(currentValue));
+        markPendingEdit(
+          key,
+          productId,
+          "port_out",
+          String(nextAddr),
+          String(currentValue)
+        );
         props.onReadCurrent?.();
       })
       .catch((e) => {
@@ -698,7 +753,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     bindIndex: number,
     slot: number,
     currentValue: number | null | undefined,
-    outputUniverseForBaseline: number,
+    outputUniverseForBaseline: number
   ) => {
     const device = selectedDevice();
     if (!device) return;
@@ -713,7 +768,8 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     if (((nextAddr >> 4) & 0x7ff) !== (baselineNetSub & 0x7ff)) {
       setFieldErrors((prev) => ({
         ...prev,
-        [key]: "Changing Net/SubNet via ArtAddress is not supported yet. Keep Net/SubNet the same and adjust only Universe (last digit).",
+        [key]:
+          "Changing Net/SubNet via ArtAddress is not supported yet. Keep Net/SubNet the same and adjust only Universe (last digit).",
       }));
       return;
     }
@@ -736,7 +792,13 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       },
     })
       .then(() => {
-        markPendingEdit(key, productId, "port_in", String(nextAddr), String(currentValue ?? ""));
+        markPendingEdit(
+          key,
+          productId,
+          "port_in",
+          String(nextAddr),
+          String(currentValue ?? "")
+        );
         props.onReadCurrent?.();
       })
       .catch((e) => {
@@ -760,7 +822,10 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   const filteredComms = createMemo(() => {
     const ip = selectedDevice()?.ip_address;
     if (!ip) return [];
-    return log.entries.filter((e) => e.sourceIp === ip).slice(-120).reverse();
+    return log.entries
+      .filter((e) => e.sourceIp === ip)
+      .slice(-120)
+      .reverse();
   });
 
   const pollActivityFor = (productId: string) =>
@@ -771,9 +836,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       return device.short_name || "Manual entry";
     }
     const base =
-      device.long_name.trim() ||
-      device.short_name.trim() ||
-      "Unknown Device";
+      device.long_name.trim() || device.short_name.trim() || "Unknown Device";
     const ordinal = nodeOrdinalById().get(device.product_id);
     return ordinal != null ? `${base} [${ordinal}]` : base;
   };
@@ -783,12 +846,15 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     if (!activity) {
       return "No ArtPollReply activity observed yet for this node in the current session.";
     }
-    const lastSeenIso = new Date(activity.lastReceivedAtMs).toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
+    const lastSeenIso = new Date(activity.lastReceivedAtMs).toLocaleTimeString(
+      "en-GB",
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }
+    );
     return [
       "ArtPollReply activity indicator",
       "",
@@ -816,9 +882,14 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   });
 
   return (
-    <div data-testid="device-list" class="rounded-lg border border-edge bg-surface p-4">
+    <div
+      data-testid="device-list"
+      class="rounded-lg border border-edge bg-surface p-4"
+    >
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-sm font-medium tracking-wide uppercase text-secondary">Devices</h2>
+        <h2 class="text-sm font-medium tracking-wide uppercase text-secondary">
+          Devices
+        </h2>
         <div class="flex items-center gap-2">
           <Show when={props.onAddManualDevice}>
             <button
@@ -849,7 +920,8 @@ const DeviceList: Component<DeviceListProps> = (props) => {
               class="rounded border px-2 py-0.5 text-[10px] uppercase tracking-wide transition-colors"
               classList={{
                 "border-teal/40 bg-teal/10 text-teal": deviceFilter() === f,
-                "border-edge text-muted hover:border-edge-active hover:text-secondary": deviceFilter() !== f,
+                "border-edge text-muted hover:border-edge-active hover:text-secondary":
+                  deviceFilter() !== f,
               }}
             >
               {f}
@@ -857,7 +929,8 @@ const DeviceList: Component<DeviceListProps> = (props) => {
           )}
         </For>
         <span class="ml-auto text-[10px] text-muted font-mono">
-          {filteredDevices().length} node{filteredDevices().length !== 1 ? "s" : ""}
+          {filteredDevices().length} node
+          {filteredDevices().length !== 1 ? "s" : ""}
         </span>
       </div>
 
@@ -873,20 +946,32 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                   {(c) => (
                     <div class="flex items-center justify-between gap-2 text-[11px] font-mono">
                       <span class="text-secondary">{c.ip}</span>
-                      <span class="text-muted">{Math.round(c.last_seen_at_ms / 100) / 10}s ago</span>
+                      <span class="text-muted">
+                        {Math.round(c.last_seen_at_ms / 100) / 10}s ago
+                      </span>
                     </div>
                   )}
                 </For>
               </div>
             </div>
           </Show>
-          <Show when={filteredDevices().length > 0} fallback={<div class="flex h-24 items-center justify-center text-xs text-muted">No Art-Net devices discovered</div>}>
+          <Show
+            when={filteredDevices().length > 0}
+            fallback={
+              <div class="flex h-24 items-center justify-center text-xs text-muted">
+                No Art-Net devices discovered
+              </div>
+            }
+          >
             <Show when={connectedDevices().length > 0}>
-              <div class="text-[10px] font-medium uppercase tracking-wider text-muted">Connected</div>
+              <div class="text-[10px] font-medium uppercase tracking-wider text-muted">
+                Connected
+              </div>
             </Show>
             <For each={connectedDevices()}>
               {(device) => {
-                const selected = () => selectedProductId() === device.product_id;
+                const selected = () =>
+                  selectedProductId() === device.product_id;
                 return (
                   <div
                     class="rounded-md border bg-obsidian p-2 transition-colors"
@@ -896,15 +981,23 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                     }}
                   >
                     <div class="flex items-center justify-between gap-2">
-                      <button type="button" onClick={() => selectDevice(device)} class="min-w-0 flex-1 text-left">
+                      <button
+                        type="button"
+                        onClick={() => selectDevice(device)}
+                        class="min-w-0 flex-1 text-left"
+                      >
                         <div class="flex items-center gap-2">
                           <PollReplyPulseDot
                             activity={pollActivityFor(device.product_id)}
                             tooltip={pulseTooltip(device)}
                             testId={`poll-reply-dot-${device.product_id}`}
                           />
-                          <span class="truncate text-sm text-primary">{deviceDisplayTitle(device)}</span>
-                          <span class="rounded bg-teal/10 px-1.5 py-0.5 text-[10px] font-mono text-teal">{device.ports.length}p</span>
+                          <span class="truncate text-sm text-primary">
+                            {deviceDisplayTitle(device)}
+                          </span>
+                          <span class="rounded bg-teal/10 px-1.5 py-0.5 text-[10px] font-mono text-teal">
+                            {device.ports.length}p
+                          </span>
                         </div>
                         <div class="mt-0.5 flex items-center gap-2 text-[11px] text-muted font-mono">
                           <span>{device.ip_address}</span>
@@ -921,7 +1014,13 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                             Read current
                           </button>
                         </Show>
-                        <button type="button" onClick={() => fetchDeviceUrls(device)} class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-primary">URLs</button>
+                        <button
+                          type="button"
+                          onClick={() => fetchDeviceUrls(device)}
+                          class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-primary"
+                        >
+                          URLs
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -930,36 +1029,63 @@ const DeviceList: Component<DeviceListProps> = (props) => {
             </For>
 
             <Show when={previouslySeenDevices().length > 0}>
-              <div class="border-t border-edge pt-3 text-[10px] font-medium uppercase tracking-wider text-muted">Previously seen</div>
+              <div class="border-t border-edge pt-3 text-[10px] font-medium uppercase tracking-wider text-muted">
+                Previously seen
+              </div>
             </Show>
             <For each={previouslySeenDevices()}>
               {(device) => (
                 <div
                   class="rounded-md border border-edge bg-obsidian/80 p-2 transition-colors"
                   classList={{
-                    "border-teal/30 ring-1 ring-teal/40": selectedProductId() === device.product_id,
-                    "hover:border-edge-active": selectedProductId() !== device.product_id,
+                    "border-teal/30 ring-1 ring-teal/40":
+                      selectedProductId() === device.product_id,
+                    "hover:border-edge-active":
+                      selectedProductId() !== device.product_id,
                   }}
                 >
                   <div class="flex items-center justify-between gap-2">
-                    <button type="button" onClick={() => selectDevice(device)} class="min-w-0 flex-1 text-left">
+                    <button
+                      type="button"
+                      onClick={() => selectDevice(device)}
+                      class="min-w-0 flex-1 text-left"
+                    >
                       <div class="flex items-center gap-2">
                         <span class="h-1.5 w-1.5 rounded-full bg-amber" />
-                        <span class="truncate text-sm text-secondary">{deviceDisplayTitle(device)}</span>
+                        <span class="truncate text-sm text-secondary">
+                          {deviceDisplayTitle(device)}
+                        </span>
                         <Show when={device.long_name === "Manual entry"}>
-                          <span class="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] text-amber">Manual</span>
+                          <span class="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] text-amber">
+                            Manual
+                          </span>
                         </Show>
                       </div>
-                      <div class="mt-0.5 text-[11px] text-muted font-mono">{device.ip_address}</div>
+                      <div class="mt-0.5 text-[11px] text-muted font-mono">
+                        {device.ip_address}
+                      </div>
                     </button>
                     <div class="flex items-center gap-1">
                       <Show when={props.onReadCurrent}>
-                        <button type="button" onClick={() => props.onReadCurrent?.()} class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-teal">Read current</button>
-                      </Show>
-                      <Show when={device.long_name === "Manual entry" && props.onRemoveManualDevice}>
                         <button
                           type="button"
-                          onClick={() => props.onRemoveManualDevice?.(device.ip_address)}
+                          onClick={() => props.onReadCurrent?.()}
+                          class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-secondary hover:text-teal"
+                        >
+                          Read current
+                        </button>
+                      </Show>
+                      <Show
+                        when={
+                          device.long_name === "Manual entry" &&
+                          props.onRemoveManualDevice
+                        }
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            props.onRemoveManualDevice?.(device.ip_address)
+                          }
                           class="rounded border border-edge bg-surface px-2 py-1 text-[10px] text-muted hover:text-amber"
                         >
                           Remove
@@ -973,28 +1099,51 @@ const DeviceList: Component<DeviceListProps> = (props) => {
           </Show>
         </div>
 
-        <div class="rounded-lg border border-edge bg-obsidian p-3" data-testid="device-detail-panel">
+        <div
+          class="rounded-lg border border-edge bg-obsidian p-3"
+          data-testid="device-detail-panel"
+        >
           <Show
             when={selectedDevice()}
-            fallback={<div class="flex h-full min-h-[16rem] items-center justify-center text-xs text-muted">Select a device to view full diagnostics and protocol details.</div>}
+            fallback={
+              <div class="flex h-full min-h-[16rem] items-center justify-center text-xs text-muted">
+                Select a device to view full diagnostics and protocol details.
+              </div>
+            }
           >
             {(device) => (
               <>
                 <div class="mb-2">
-                  <div class="text-sm text-primary truncate">{deviceDisplayTitle(device())}</div>
-                  <div class="text-[11px] font-mono text-muted">{device().ip_address}</div>
+                  <div class="text-sm text-primary truncate">
+                    {deviceDisplayTitle(device())}
+                  </div>
+                  <div class="text-[11px] font-mono text-muted">
+                    {device().ip_address}
+                  </div>
                 </div>
 
                 <div class="mb-3 flex flex-wrap gap-1.5">
-                  <For each={["overview", "ports", "diagnostics", "comms", "protocol"] as DeviceTab[]}>
+                  <For
+                    each={
+                      [
+                        "overview",
+                        "ports",
+                        "diagnostics",
+                        "comms",
+                        "protocol",
+                      ] as DeviceTab[]
+                    }
+                  >
                     {(tab) => (
                       <button
                         type="button"
                         onClick={() => setDetailTab(tab)}
                         class="rounded border px-2 py-1 text-[10px] uppercase tracking-wide"
                         classList={{
-                          "border-teal/40 bg-teal/10 text-teal": detailTab() === tab,
-                          "border-edge text-muted hover:border-edge-active hover:text-secondary": detailTab() !== tab,
+                          "border-teal/40 bg-teal/10 text-teal":
+                            detailTab() === tab,
+                          "border-edge text-muted hover:border-edge-active hover:text-secondary":
+                            detailTab() !== tab,
                         }}
                       >
                         {tab}
@@ -1026,7 +1175,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         <input
                           autofocus
                           value={editingValue()}
-                          onInput={(e) => setEditingValue(e.currentTarget.value)}
+                          onInput={(e) =>
+                            setEditingValue(e.currentTarget.value)
+                          }
                           onBlur={() => setEditingIp(false)}
                           onKeyDown={(e) => {
                             if (e.key === "Escape") setEditingIp(false);
@@ -1037,15 +1188,22 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                       </Show>
                       <Show when={editingIp()}>
                         <div class="mt-1 text-[10px] text-amber">
-                          Warning: IP changes can disconnect the node from the rig network.
+                          Warning: IP changes can disconnect the node from the
+                          rig network.
                         </div>
                       </Show>
-                      <div class="text-[10px] text-teal">{fieldSpinner("ip")}</div>
+                      <div class="text-[10px] text-teal">
+                        {fieldSpinner("ip")}
+                      </div>
                       <Show when={pendingEdits()["ip"]?.warning}>
-                        <div class="mt-1 text-[10px] text-amber">{pendingEdits()["ip"]?.warning}</div>
+                        <div class="mt-1 text-[10px] text-amber">
+                          {pendingEdits()["ip"]?.warning}
+                        </div>
                       </Show>
                       <Show when={fieldErrors()["ip"]}>
-                        <div class="mt-1 text-[10px] text-error">{fieldErrors()["ip"]}</div>
+                        <div class="mt-1 text-[10px] text-error">
+                          {fieldErrors()["ip"]}
+                        </div>
                       </Show>
                     </div>
                     <span class="text-muted">IP cfg</span>
@@ -1056,7 +1214,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                           <Show when={ipProgForSelected()}>
                             <span class="ml-2 normal-case text-muted">
                               (last read{" "}
-                              {new Date(ipProgForSelected()!.receivedAtMs).toLocaleTimeString("en-GB", {
+                              {new Date(
+                                ipProgForSelected()!.receivedAtMs
+                              ).toLocaleTimeString("en-GB", {
                                 hour: "2-digit",
                                 minute: "2-digit",
                                 second: "2-digit",
@@ -1077,7 +1237,11 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
                       <Show
                         when={ipProgForSelected()}
-                        fallback={<div class="mt-1 text-[11px] text-secondary">Not read yet.</div>}
+                        fallback={
+                          <div class="mt-1 text-[11px] text-secondary">
+                            Not read yet.
+                          </div>
+                        }
                       >
                         <div class="mt-1 grid grid-cols-4 gap-x-2 gap-y-1 text-[11px]">
                           <span class="text-muted">mask</span>
@@ -1091,7 +1255,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                 onDblClick={() => {
                                   beginEdit(
                                     `ipprog_subnet_mask:${device().product_id}`,
-                                    ipProgForSelected()!.reply.subnet_mask,
+                                    ipProgForSelected()!.reply.subnet_mask
                                   );
                                   setEditingIpProgField("subnet_mask");
                                 }}
@@ -1103,11 +1267,18 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                             <input
                               autofocus
                               value={editingValue()}
-                              onInput={(e) => setEditingValue(e.currentTarget.value)}
+                              onInput={(e) =>
+                                setEditingValue(e.currentTarget.value)
+                              }
                               onBlur={() => setEditingIpProgField(null)}
                               onKeyDown={(e) => {
-                                if (e.key === "Escape") setEditingIpProgField(null);
-                                if (e.key === "Enter") void submitIpProgField(device(), "subnet_mask");
+                                if (e.key === "Escape")
+                                  setEditingIpProgField(null);
+                                if (e.key === "Enter")
+                                  void submitIpProgField(
+                                    device(),
+                                    "subnet_mask"
+                                  );
                               }}
                               class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
                             />
@@ -1123,7 +1294,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                 onDblClick={() => {
                                   beginEdit(
                                     `ipprog_gateway:${device().product_id}`,
-                                    ipProgForSelected()!.reply.gateway,
+                                    ipProgForSelected()!.reply.gateway
                                   );
                                   setEditingIpProgField("gateway");
                                 }}
@@ -1135,11 +1306,15 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                             <input
                               autofocus
                               value={editingValue()}
-                              onInput={(e) => setEditingValue(e.currentTarget.value)}
+                              onInput={(e) =>
+                                setEditingValue(e.currentTarget.value)
+                              }
                               onBlur={() => setEditingIpProgField(null)}
                               onKeyDown={(e) => {
-                                if (e.key === "Escape") setEditingIpProgField(null);
-                                if (e.key === "Enter") void submitIpProgField(device(), "gateway");
+                                if (e.key === "Escape")
+                                  setEditingIpProgField(null);
+                                if (e.key === "Enter")
+                                  void submitIpProgField(device(), "gateway");
                               }}
                               class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
                             />
@@ -1156,7 +1331,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                 onDblClick={() => {
                                   beginEdit(
                                     `ipprog_port:${device().product_id}`,
-                                    String(ipProgForSelected()!.reply.port),
+                                    String(ipProgForSelected()!.reply.port)
                                   );
                                   setEditingIpProgField("port");
                                 }}
@@ -1168,33 +1343,75 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                             <input
                               autofocus
                               value={editingValue()}
-                              onInput={(e) => setEditingValue(e.currentTarget.value)}
+                              onInput={(e) =>
+                                setEditingValue(e.currentTarget.value)
+                              }
                               onBlur={() => setEditingIpProgField(null)}
                               onKeyDown={(e) => {
-                                if (e.key === "Escape") setEditingIpProgField(null);
-                                if (e.key === "Enter") void submitIpProgField(device(), "port");
+                                if (e.key === "Escape")
+                                  setEditingIpProgField(null);
+                                if (e.key === "Enter")
+                                  void submitIpProgField(device(), "port");
                               }}
                               class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
                             />
                           </Show>
                           <span class="text-muted">dhcp</span>
                           <span class="font-mono text-secondary">
-                            {ipProgForSelected()!.reply.dhcp_enabled ? "on" : "off"}
+                            {ipProgForSelected()!.reply.dhcp_enabled
+                              ? "on"
+                              : "off"}
                           </span>
                         </div>
                       </Show>
-                      <div class="text-[10px] text-teal">{fieldSpinner(`ipprog_read:${device().product_id}`)}</div>
-                      <Show when={fieldErrors()[`ipprog_read:${device().product_id}`]}>
-                        <div class="mt-1 text-[10px] text-error">{fieldErrors()[`ipprog_read:${device().product_id}`]}</div>
+                      <div class="text-[10px] text-teal">
+                        {fieldSpinner(`ipprog_read:${device().product_id}`)}
+                      </div>
+                      <Show
+                        when={
+                          fieldErrors()[`ipprog_read:${device().product_id}`]
+                        }
+                      >
+                        <div class="mt-1 text-[10px] text-error">
+                          {fieldErrors()[`ipprog_read:${device().product_id}`]}
+                        </div>
                       </Show>
-                      <Show when={fieldErrors()[`ipprog_subnet_mask:${device().product_id}`]}>
-                        <div class="mt-1 text-[10px] text-error">{fieldErrors()[`ipprog_subnet_mask:${device().product_id}`]}</div>
+                      <Show
+                        when={
+                          fieldErrors()[
+                            `ipprog_subnet_mask:${device().product_id}`
+                          ]
+                        }
+                      >
+                        <div class="mt-1 text-[10px] text-error">
+                          {
+                            fieldErrors()[
+                              `ipprog_subnet_mask:${device().product_id}`
+                            ]
+                          }
+                        </div>
                       </Show>
-                      <Show when={fieldErrors()[`ipprog_gateway:${device().product_id}`]}>
-                        <div class="mt-1 text-[10px] text-error">{fieldErrors()[`ipprog_gateway:${device().product_id}`]}</div>
+                      <Show
+                        when={
+                          fieldErrors()[`ipprog_gateway:${device().product_id}`]
+                        }
+                      >
+                        <div class="mt-1 text-[10px] text-error">
+                          {
+                            fieldErrors()[
+                              `ipprog_gateway:${device().product_id}`
+                            ]
+                          }
+                        </div>
                       </Show>
-                      <Show when={fieldErrors()[`ipprog_port:${device().product_id}`]}>
-                        <div class="mt-1 text-[10px] text-error">{fieldErrors()[`ipprog_port:${device().product_id}`]}</div>
+                      <Show
+                        when={
+                          fieldErrors()[`ipprog_port:${device().product_id}`]
+                        }
+                      >
+                        <div class="mt-1 text-[10px] text-error">
+                          {fieldErrors()[`ipprog_port:${device().product_id}`]}
+                        </div>
                       </Show>
                     </div>
                     <span class="text-muted">Long Name</span>
@@ -1221,7 +1438,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         <input
                           autofocus
                           value={editingValue()}
-                          onInput={(e) => setEditingValue(e.currentTarget.value)}
+                          onInput={(e) =>
+                            setEditingValue(e.currentTarget.value)
+                          }
                           onBlur={() => setEditingLongName(false)}
                           onKeyDown={(e) => {
                             if (e.key === "Escape") setEditingLongName(false);
@@ -1233,23 +1452,55 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                       <div class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-2 text-[10px] text-teal">
                         {fieldSpinner("long_name")}
                         <Show when={isFieldBusy("long_name")}>
-                          <span class="text-muted">Waiting for ArtPollReply…</span>
+                          <span class="text-muted">
+                            Waiting for ArtPollReply…
+                          </span>
                         </Show>
                       </div>
                       <Show when={pendingEdits()["long_name"]?.warning}>
-                        <div class="mt-1 text-[10px] text-amber">{pendingEdits()["long_name"]?.warning}</div>
+                        <div class="mt-1 text-[10px] text-amber">
+                          {pendingEdits()["long_name"]?.warning}
+                        </div>
                       </Show>
                       <Show when={fieldErrors()["long_name"]}>
-                        <div class="mt-1 text-[10px] text-error">{fieldErrors()["long_name"]}</div>
+                        <div class="mt-1 text-[10px] text-error">
+                          {fieldErrors()["long_name"]}
+                        </div>
                       </Show>
                     </div>
-                    <span class="text-muted">MAC</span><span class="font-mono text-secondary">{device().mac_address || "Not reported"}</span>
-                    <span class="text-muted">Firmware</span><span class="font-mono text-secondary">{hex(device().firmware_version, 4)}</span>
-                    <span class="text-muted">OEM / ESTA</span><span class="font-mono text-secondary">{hex(device().oem_code, 4)} / {hex(device().esta_man, 4)}</span>
-                    <span class="text-muted">Node Report</span><span class="text-secondary truncate" title={device().node_report || "Not reported"}>{device().node_report || "Not reported"}</span>
-                    <span class="text-muted">Bind IP</span><span class="font-mono text-secondary">{device().bind_ip || "-"}</span>
+                    <span class="text-muted">MAC</span>
+                    <span class="font-mono text-secondary">
+                      {device().mac_address || "Not reported"}
+                    </span>
+                    <span class="text-muted">Firmware</span>
+                    <span class="font-mono text-secondary">
+                      {hex(device().firmware_version, 4)}
+                    </span>
+                    <span class="text-muted">OEM / ESTA</span>
+                    <span class="font-mono text-secondary">
+                      {hex(device().oem_code, 4)} / {hex(device().esta_man, 4)}
+                    </span>
+                    <span class="text-muted">Node Report</span>
+                    <span
+                      class="text-secondary truncate"
+                      title={device().node_report || "Not reported"}
+                    >
+                      {device().node_report || "Not reported"}
+                    </span>
+                    <span class="text-muted">Bind IP</span>
+                    <span class="font-mono text-secondary">
+                      {device().bind_ip || "-"}
+                    </span>
                     <span class="text-muted">Output universes</span>
-                    <span class="font-mono text-secondary text-[11px]">{device().ports.length ? device().ports.map((p) => formatPortAddress(p.output_universe)).join(", ") : "None"}</span>
+                    <span class="font-mono text-secondary text-[11px]">
+                      {device().ports.length
+                        ? device()
+                            .ports.map((p) =>
+                              formatPortAddress(p.output_universe)
+                            )
+                            .join(", ")
+                        : "None"}
+                    </span>
                   </div>
 
                   <div class="mt-3 border-t border-edge pt-3">
@@ -1271,17 +1522,64 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                           disabled={urlsFor(device().ip_address)?.loading}
                           class="rounded-md border border-edge bg-surface px-2 py-1 text-[11px] text-secondary hover:bg-surface-hover disabled:opacity-50"
                         >
-                          {urlsFor(device().ip_address)?.loading ? "Fetching…" : "Fetch URLs"}
+                          {urlsFor(device().ip_address)?.loading
+                            ? "Fetching…"
+                            : "Fetch URLs"}
                         </button>
                       </div>
                     </div>
-                    <Show when={urlsFor(device().ip_address)?.error}><div class="mb-1 text-[11px] text-error">{urlsFor(device().ip_address)?.error}</div></Show>
+                    <Show when={urlsFor(device().ip_address)?.error}>
+                      <div class="mb-1 text-[11px] text-error">
+                        {urlsFor(device().ip_address)?.error}
+                      </div>
+                    </Show>
                     <div class="flex flex-col gap-1 text-[11px]">
-                      <Show when={urlsFor(device().ip_address)?.product_url}>{(url) => <button type="button" onClick={() => open(url())} class="truncate text-left text-teal hover:text-teal-dim">Product: {url()}</button>}</Show>
-                      <Show when={urlsFor(device().ip_address)?.user_guide}>{(url) => <button type="button" onClick={() => open(url())} class="truncate text-left text-teal hover:text-teal-dim">Guide: {url()}</button>}</Show>
-                      <Show when={urlsFor(device().ip_address)?.support}>{(url) => <button type="button" onClick={() => open(url())} class="truncate text-left text-teal hover:text-teal-dim">Support: {url()}</button>}</Show>
-                      <Show when={!urlsFor(device().ip_address)?.loading && !urlsFor(device().ip_address)?.error && !urlsFor(device().ip_address)?.product_url && !urlsFor(device().ip_address)?.user_guide && !urlsFor(device().ip_address)?.support && urlsFor(device().ip_address) !== undefined}>
-                        <span class="text-muted">No URLs returned by device</span>
+                      <Show when={urlsFor(device().ip_address)?.product_url}>
+                        {(url) => (
+                          <button
+                            type="button"
+                            onClick={() => open(url())}
+                            class="truncate text-left text-teal hover:text-teal-dim"
+                          >
+                            Product: {url()}
+                          </button>
+                        )}
+                      </Show>
+                      <Show when={urlsFor(device().ip_address)?.user_guide}>
+                        {(url) => (
+                          <button
+                            type="button"
+                            onClick={() => open(url())}
+                            class="truncate text-left text-teal hover:text-teal-dim"
+                          >
+                            Guide: {url()}
+                          </button>
+                        )}
+                      </Show>
+                      <Show when={urlsFor(device().ip_address)?.support}>
+                        {(url) => (
+                          <button
+                            type="button"
+                            onClick={() => open(url())}
+                            class="truncate text-left text-teal hover:text-teal-dim"
+                          >
+                            Support: {url()}
+                          </button>
+                        )}
+                      </Show>
+                      <Show
+                        when={
+                          !urlsFor(device().ip_address)?.loading &&
+                          !urlsFor(device().ip_address)?.error &&
+                          !urlsFor(device().ip_address)?.product_url &&
+                          !urlsFor(device().ip_address)?.user_guide &&
+                          !urlsFor(device().ip_address)?.support &&
+                          urlsFor(device().ip_address) !== undefined
+                        }
+                      >
+                        <span class="text-muted">
+                          No URLs returned by device
+                        </span>
                       </Show>
                     </div>
                   </div>
@@ -1303,25 +1601,43 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                           <Index each={device().ports}>
                             {(p) => (
                               <tr class="border-b border-edge/40">
-                                <td class="px-2 py-1 font-mono text-secondary">{p().bind_index}</td>
+                                <td class="px-2 py-1 font-mono text-secondary">
+                                  {p().bind_index}
+                                </td>
                                 <td
                                   class="px-2 py-1 text-primary"
                                   aria-busy={
-                                    isFieldBusy(portFieldKey(p().bind_index, p().slot))
+                                    isFieldBusy(
+                                      portFieldKey(p().bind_index, p().slot)
+                                    )
                                       ? "true"
                                       : "false"
                                   }
                                 >
                                   <Show
-                                    when={editingPortKey() === portFieldKey(p().bind_index, p().slot)}
+                                    when={
+                                      editingPortKey() ===
+                                      portFieldKey(p().bind_index, p().slot)
+                                    }
                                     fallback={
                                       <button
                                         type="button"
                                         class="w-full truncate text-left text-primary hover:text-teal"
                                         title="Double-click to edit port name"
                                         onDblClick={() => {
-                                          beginEdit(portFieldKey(p().bind_index, p().slot), p().label);
-                                          setEditingPortKey(portFieldKey(p().bind_index, p().slot));
+                                          beginEdit(
+                                            portFieldKey(
+                                              p().bind_index,
+                                              p().slot
+                                            ),
+                                            p().label
+                                          );
+                                          setEditingPortKey(
+                                            portFieldKey(
+                                              p().bind_index,
+                                              p().slot
+                                            )
+                                          );
                                         }}
                                       >
                                         {p().label}
@@ -1332,41 +1648,94 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                       autofocus
                                       maxlength={17}
                                       value={editingValue()}
-                                      onInput={(e) => setEditingValue(e.currentTarget.value)}
+                                      onInput={(e) =>
+                                        setEditingValue(e.currentTarget.value)
+                                      }
                                       onBlur={() => setEditingPortKey(null)}
                                       onKeyDown={(e) => {
-                                        if (e.key === "Escape") setEditingPortKey(null);
+                                        if (e.key === "Escape")
+                                          setEditingPortKey(null);
                                         if (e.key === "Enter") {
-                                          void submitPortNameEdit(p().bind_index, p().slot, p().label);
+                                          void submitPortNameEdit(
+                                            p().bind_index,
+                                            p().slot,
+                                            p().label
+                                          );
                                         }
                                       }}
                                       class="w-full rounded border border-edge-active bg-surface px-2 py-1 text-[11px] text-primary focus:border-teal/40 focus:outline-none"
                                     />
                                   </Show>
                                   <div class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-1.5 text-[10px] text-teal">
-                                    {fieldSpinner(portFieldKey(p().bind_index, p().slot))}
-                                    <Show when={isFieldBusy(portFieldKey(p().bind_index, p().slot))}>
+                                    {fieldSpinner(
+                                      portFieldKey(p().bind_index, p().slot)
+                                    )}
+                                    <Show
+                                      when={isFieldBusy(
+                                        portFieldKey(p().bind_index, p().slot)
+                                      )}
+                                    >
                                       <span class="text-muted">Waiting…</span>
                                     </Show>
                                   </div>
-                                  <Show when={pendingEdits()[portFieldKey(p().bind_index, p().slot)]?.warning}>
-                                    <div class="mt-1 text-[10px] text-amber">{pendingEdits()[portFieldKey(p().bind_index, p().slot)]?.warning}</div>
+                                  <Show
+                                    when={
+                                      pendingEdits()[
+                                        portFieldKey(p().bind_index, p().slot)
+                                      ]?.warning
+                                    }
+                                  >
+                                    <div class="mt-1 text-[10px] text-amber">
+                                      {
+                                        pendingEdits()[
+                                          portFieldKey(p().bind_index, p().slot)
+                                        ]?.warning
+                                      }
+                                    </div>
                                   </Show>
-                                  <Show when={fieldErrors()[portFieldKey(p().bind_index, p().slot)]}>
-                                    <div class="mt-1 text-[10px] text-error">{fieldErrors()[portFieldKey(p().bind_index, p().slot)]}</div>
+                                  <Show
+                                    when={
+                                      fieldErrors()[
+                                        portFieldKey(p().bind_index, p().slot)
+                                      ]
+                                    }
+                                  >
+                                    <div class="mt-1 text-[10px] text-error">
+                                      {
+                                        fieldErrors()[
+                                          portFieldKey(p().bind_index, p().slot)
+                                        ]
+                                      }
+                                    </div>
                                   </Show>
                                 </td>
                                 <td class="px-2 py-1 font-mono text-secondary">
                                   <Show
-                                    when={editingPortKey() === outFieldKey(p().bind_index, p().slot)}
+                                    when={
+                                      editingPortKey() ===
+                                      outFieldKey(p().bind_index, p().slot)
+                                    }
                                     fallback={
                                       <button
                                         type="button"
                                         class="w-full truncate text-left font-mono text-secondary hover:text-teal"
                                         title="Double-click to edit output port address"
                                         onDblClick={() => {
-                                          beginEdit(outFieldKey(p().bind_index, p().slot), formatPortAddress(p().output_universe));
-                                          setEditingPortKey(outFieldKey(p().bind_index, p().slot));
+                                          beginEdit(
+                                            outFieldKey(
+                                              p().bind_index,
+                                              p().slot
+                                            ),
+                                            formatPortAddress(
+                                              p().output_universe
+                                            )
+                                          );
+                                          setEditingPortKey(
+                                            outFieldKey(
+                                              p().bind_index,
+                                              p().slot
+                                            )
+                                          );
                                         }}
                                       >
                                         {formatPortAddress(p().output_universe)}
@@ -1376,28 +1745,66 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                     <input
                                       autofocus
                                       value={editingValue()}
-                                      onInput={(e) => setEditingValue(e.currentTarget.value)}
+                                      onInput={(e) =>
+                                        setEditingValue(e.currentTarget.value)
+                                      }
                                       onBlur={() => setEditingPortKey(null)}
                                       onKeyDown={(e) => {
-                                        if (e.key === "Escape") setEditingPortKey(null);
+                                        if (e.key === "Escape")
+                                          setEditingPortKey(null);
                                         if (e.key === "Enter") {
-                                          void submitPortOutEdit(p().bind_index, p().slot, p().output_universe);
+                                          void submitPortOutEdit(
+                                            p().bind_index,
+                                            p().slot,
+                                            p().output_universe
+                                          );
                                         }
                                       }}
                                       class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
                                     />
                                   </Show>
-                                  <div class="text-[10px] text-teal">{fieldSpinner(outFieldKey(p().bind_index, p().slot))}</div>
-                                  <Show when={pendingEdits()[outFieldKey(p().bind_index, p().slot)]?.warning}>
-                                    <div class="mt-1 text-[10px] text-amber">{pendingEdits()[outFieldKey(p().bind_index, p().slot)]?.warning}</div>
+                                  <div class="text-[10px] text-teal">
+                                    {fieldSpinner(
+                                      outFieldKey(p().bind_index, p().slot)
+                                    )}
+                                  </div>
+                                  <Show
+                                    when={
+                                      pendingEdits()[
+                                        outFieldKey(p().bind_index, p().slot)
+                                      ]?.warning
+                                    }
+                                  >
+                                    <div class="mt-1 text-[10px] text-amber">
+                                      {
+                                        pendingEdits()[
+                                          outFieldKey(p().bind_index, p().slot)
+                                        ]?.warning
+                                      }
+                                    </div>
                                   </Show>
-                                  <Show when={fieldErrors()[outFieldKey(p().bind_index, p().slot)]}>
-                                    <div class="mt-1 text-[10px] text-error">{fieldErrors()[outFieldKey(p().bind_index, p().slot)]}</div>
+                                  <Show
+                                    when={
+                                      fieldErrors()[
+                                        outFieldKey(p().bind_index, p().slot)
+                                      ]
+                                    }
+                                  >
+                                    <div class="mt-1 text-[10px] text-error">
+                                      {
+                                        fieldErrors()[
+                                          outFieldKey(p().bind_index, p().slot)
+                                        ]
+                                      }
+                                    </div>
                                   </Show>
                                 </td>
                                 <td class="px-2 py-1 font-mono text-secondary">
                                   <Show
-                                    when={editingPortKey() === inFieldKey(p().bind_index, p().slot)}
+                                    when={
+                                      editingPortKey() ===
+                                      inFieldKey(p().bind_index, p().slot)
+                                    }
                                     fallback={
                                       <button
                                         type="button"
@@ -1405,41 +1812,85 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                         title="Double-click to edit input port address"
                                         onDblClick={() => {
                                           beginEdit(
-                                            inFieldKey(p().bind_index, p().slot),
-                                            p().input_universe != null ? formatPortAddress(p().input_universe) : "",
+                                            inFieldKey(
+                                              p().bind_index,
+                                              p().slot
+                                            ),
+                                            p().input_universe != null
+                                              ? formatPortAddress(
+                                                  p().input_universe
+                                                )
+                                              : ""
                                           );
-                                          setEditingPortKey(inFieldKey(p().bind_index, p().slot));
+                                          setEditingPortKey(
+                                            inFieldKey(p().bind_index, p().slot)
+                                          );
                                         }}
                                       >
-                                        {p().input_universe != null ? formatPortAddress(p().input_universe) : "—"}
+                                        {p().input_universe != null
+                                          ? formatPortAddress(
+                                              p().input_universe
+                                            )
+                                          : "—"}
                                       </button>
                                     }
                                   >
                                     <input
                                       autofocus
                                       value={editingValue()}
-                                      onInput={(e) => setEditingValue(e.currentTarget.value)}
+                                      onInput={(e) =>
+                                        setEditingValue(e.currentTarget.value)
+                                      }
                                       onBlur={() => setEditingPortKey(null)}
                                       onKeyDown={(e) => {
-                                        if (e.key === "Escape") setEditingPortKey(null);
+                                        if (e.key === "Escape")
+                                          setEditingPortKey(null);
                                         if (e.key === "Enter") {
                                           void submitPortInEdit(
                                             p().bind_index,
                                             p().slot,
                                             p().input_universe,
-                                            p().output_universe,
+                                            p().output_universe
                                           );
                                         }
                                       }}
                                       class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
                                     />
                                   </Show>
-                                  <div class="text-[10px] text-teal">{fieldSpinner(inFieldKey(p().bind_index, p().slot))}</div>
-                                  <Show when={pendingEdits()[inFieldKey(p().bind_index, p().slot)]?.warning}>
-                                    <div class="mt-1 text-[10px] text-amber">{pendingEdits()[inFieldKey(p().bind_index, p().slot)]?.warning}</div>
+                                  <div class="text-[10px] text-teal">
+                                    {fieldSpinner(
+                                      inFieldKey(p().bind_index, p().slot)
+                                    )}
+                                  </div>
+                                  <Show
+                                    when={
+                                      pendingEdits()[
+                                        inFieldKey(p().bind_index, p().slot)
+                                      ]?.warning
+                                    }
+                                  >
+                                    <div class="mt-1 text-[10px] text-amber">
+                                      {
+                                        pendingEdits()[
+                                          inFieldKey(p().bind_index, p().slot)
+                                        ]?.warning
+                                      }
+                                    </div>
                                   </Show>
-                                  <Show when={fieldErrors()[inFieldKey(p().bind_index, p().slot)]}>
-                                    <div class="mt-1 text-[10px] text-error">{fieldErrors()[inFieldKey(p().bind_index, p().slot)]}</div>
+                                  <Show
+                                    when={
+                                      fieldErrors()[
+                                        inFieldKey(p().bind_index, p().slot)
+                                      ]
+                                    }
+                                  >
+                                    <div class="mt-1 text-[10px] text-error">
+                                      {
+                                        fieldErrors()[
+                                          inFieldKey(p().bind_index, p().slot)
+                                        ]
+                                      }
+                                    </div>
                                   </Show>
                                 </td>
                               </tr>
@@ -1449,7 +1900,10 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                       </table>
                     </div>
                     <Show when={device().ports.length === 0}>
-                      <div class="text-[11px] text-muted">No ports reported (e.g. manual entry or controller with no DMX outputs).</div>
+                      <div class="text-[11px] text-muted">
+                        No ports reported (e.g. manual entry or controller with
+                        no DMX outputs).
+                      </div>
                     </Show>
                   </div>
                 </Show>
@@ -1457,24 +1911,55 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                 <Show when={detailTab() === "diagnostics"}>
                   <div class="space-y-2 text-xs">
                     <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                      <span class="text-muted">Online</span><span class="text-secondary">{device().online === false ? "No" : "Yes"}</span>
-                      <span class="text-muted">Ports</span><span class="font-mono text-secondary">{device().ports.length}</span>
+                      <span class="text-muted">Online</span>
+                      <span class="text-secondary">
+                        {device().online === false ? "No" : "Yes"}
+                      </span>
+                      <span class="text-muted">Ports</span>
+                      <span class="font-mono text-secondary">
+                        {device().ports.length}
+                      </span>
                     </div>
                     <div class="rounded border border-edge bg-surface p-2 text-[11px] text-muted">
-                      Per-bind status flags are available in the flat `get_devices` API; the product view focuses on merged ports.
+                      Per-bind status flags are available in the flat
+                      `get_devices` API; the product view focuses on merged
+                      ports.
                     </div>
                   </div>
                 </Show>
 
                 <Show when={detailTab() === "comms"}>
                   <div class="max-h-[18rem] overflow-auto rounded border border-edge bg-surface text-xs font-mono">
-                    <Show when={filteredComms().length > 0} fallback={<div class="p-3 text-muted">No diagnostic entries for this device yet.</div>}>
+                    <Show
+                      when={filteredComms().length > 0}
+                      fallback={
+                        <div class="p-3 text-muted">
+                          No diagnostic entries for this device yet.
+                        </div>
+                      }
+                    >
                       <For each={filteredComms()}>
                         {(entry) => (
                           <div class="flex gap-2 border-b border-edge/50 px-2 py-1">
-                            <span class="text-muted">{new Date(entry.receivedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</span>
-                            <span class={`w-10 ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
-                            <span class="text-primary break-words">{entry.message}</span>
+                            <span class="text-muted">
+                              {new Date(entry.receivedAt).toLocaleTimeString(
+                                "en-GB",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: false,
+                                }
+                              )}
+                            </span>
+                            <span
+                              class={`w-10 ${priorityColor(entry.priority)}`}
+                            >
+                              {priorityLabel(entry.priority)}
+                            </span>
+                            <span class="text-primary break-words">
+                              {entry.message}
+                            </span>
                           </div>
                         )}
                       </For>
@@ -1489,7 +1974,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                     <div>bind_ip: {device().bind_ip}</div>
                     <div>mac_address: {device().mac_address || "—"}</div>
                     <div>ports_merged: {device().ports.length}</div>
-                    <div>node_report: {device().node_report || "Not reported"}</div>
+                    <div>
+                      node_report: {device().node_report || "Not reported"}
+                    </div>
                   </div>
                 </Show>
               </>
@@ -1504,19 +1991,26 @@ const DeviceList: Component<DeviceListProps> = (props) => {
           class="fixed inset-0 z-50 flex items-center justify-center bg-obsidian/80"
           role="dialog"
           aria-label="Add device manually"
-          onClick={(e) => e.target === e.currentTarget && setAddDeviceOpen(false)}
+          onClick={(e) =>
+            e.target === e.currentTarget && setAddDeviceOpen(false)
+          }
           onKeyDown={(e) => e.key === "Escape" && setAddDeviceOpen(false)}
         >
           <div
             class="w-full max-w-sm rounded-lg border border-edge bg-surface p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 class="mb-3 text-sm font-medium text-primary">Add device manually</h3>
+            <h3 class="mb-3 text-sm font-medium text-primary">
+              Add device manually
+            </h3>
             <p class="mb-3 text-[11px] text-muted">
-              Enter an IP address to add a device without discovery (e.g. static IP, firewall).
+              Enter an IP address to add a device without discovery (e.g. static
+              IP, firewall).
             </p>
             <div class="mb-4 space-y-2">
-              <label class="block text-[11px] text-secondary">IP address <span class="text-amber">*</span></label>
+              <label class="block text-[11px] text-secondary">
+                IP address <span class="text-amber">*</span>
+              </label>
               <input
                 type="text"
                 value={addDeviceIp()}
@@ -1525,7 +2019,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                 class="w-full rounded border border-edge bg-obsidian px-2 py-1.5 text-[11px] text-primary placeholder:text-muted focus:border-teal/40 focus:outline-none"
                 data-testid="add-device-ip"
               />
-              <label class="block text-[11px] text-secondary">Name (optional)</label>
+              <label class="block text-[11px] text-secondary">
+                Name (optional)
+              </label>
               <input
                 type="text"
                 value={addDeviceName()}

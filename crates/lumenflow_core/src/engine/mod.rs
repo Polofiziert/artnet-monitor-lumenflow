@@ -11,11 +11,10 @@ pub mod sync_detector;
 pub mod universe_metrics;
 
 pub use diag_buffer::{DiagBuffer, DiagEntry, DiagPriority};
-pub use jitter_collector::JitterCollector;
 pub use discovery::{
-    parse_discovery_targets_from_env, spawn_discovery, spawn_discovery_with_config,
-    DiscoveryConfig,
+    parse_discovery_targets_from_env, spawn_discovery, spawn_discovery_with_config, DiscoveryConfig,
 };
+pub use jitter_collector::JitterCollector;
 pub use source_tracker::SourceTracker;
 pub use sync_detector::SyncDetector;
 pub use universe_metrics::{Staleness, UniverseMetrics};

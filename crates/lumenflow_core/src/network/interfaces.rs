@@ -142,9 +142,7 @@ pub fn derive_cidr_24_from_ip(ip: Ipv4Addr) -> String {
 /// let iface = resolve_interface_for_cidr("192.168.1.0/24")?;
 /// // Returns first interface with IP in 192.168.1.0–192.168.1.255
 /// ```
-pub fn resolve_interface_for_cidr(
-    cidr: &str,
-) -> Result<Option<NetworkInterface>, InterfacesError> {
+pub fn resolve_interface_for_cidr(cidr: &str) -> Result<Option<NetworkInterface>, InterfacesError> {
     let network: Ipv4Network = cidr
         .parse()
         .map_err(|e| InterfacesError::InvalidCidr(format!("{e}")))?;
@@ -174,9 +172,18 @@ mod tests {
     fn test_default_spec_broadcast_targets() {
         let targets = default_spec_broadcast_targets(6454);
         assert_eq!(targets.len(), 3);
-        assert_eq!(targets[0].ip(), std::net::IpAddr::V4(Ipv4Addr::new(2, 255, 255, 255)));
-        assert_eq!(targets[1].ip(), std::net::IpAddr::V4(Ipv4Addr::new(10, 255, 255, 255)));
-        assert_eq!(targets[2].ip(), std::net::IpAddr::V4(Ipv4Addr::new(127, 255, 255, 255)));
+        assert_eq!(
+            targets[0].ip(),
+            std::net::IpAddr::V4(Ipv4Addr::new(2, 255, 255, 255))
+        );
+        assert_eq!(
+            targets[1].ip(),
+            std::net::IpAddr::V4(Ipv4Addr::new(10, 255, 255, 255))
+        );
+        assert_eq!(
+            targets[2].ip(),
+            std::net::IpAddr::V4(Ipv4Addr::new(127, 255, 255, 255))
+        );
     }
 
     #[test]

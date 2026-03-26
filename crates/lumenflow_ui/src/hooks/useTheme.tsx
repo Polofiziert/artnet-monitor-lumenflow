@@ -33,8 +33,7 @@ export const ThemeProvider: ParentComponent = (props) => {
       window.matchMedia("(prefers-color-scheme: dark)").matches
   );
 
-  const effective = () =>
-    resolveEffectiveTheme(preference(), prefersDark());
+  const effective = () => resolveEffectiveTheme(preference(), prefersDark());
 
   createEffect(() => {
     applyEffectiveTheme(effective());
@@ -73,7 +72,9 @@ export const ThemeProvider: ParentComponent = (props) => {
   };
 
   return (
-    <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>
+    <ThemeContext.Provider value={value}>
+      {props.children}
+    </ThemeContext.Provider>
   );
 };
 

@@ -3,16 +3,16 @@
 mod network_commands;
 mod viewport_culler;
 
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use dashmap::DashSet;
-use parking_lot::RwLock;
-use tracing_subscriber::EnvFilter;
 use lumenflow_core::engine::DiagBuffer;
 use lumenflow_core::{DeviceRegistry, JitterCollector, SyncDetector, UniverseStore};
+use parking_lot::RwLock;
 use tauri::Manager;
+use tracing_subscriber::EnvFilter;
 
 use network_commands::{
     get_network_interfaces_cmd, get_network_settings_cmd, init_network_state,
@@ -20,8 +20,8 @@ use network_commands::{
 };
 use viewport_culler::{
     get_artnet_products, get_available_universes, get_controllers, get_devices, get_diag_entries,
-    request_device_url, send_art_address, send_ip_prog, set_active_universes, start_emit_loop, start_network_listeners,
-    AppState,
+    request_device_url, send_art_address, send_ip_prog, set_active_universes, start_emit_loop,
+    start_network_listeners, AppState,
 };
 
 fn main() {

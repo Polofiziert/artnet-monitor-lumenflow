@@ -98,11 +98,11 @@ lumenflow
 
 LumenFlow uses Tauri's platform-specific paths (`dev.lumenflow.app`):
 
-| Platform | Config (network.json) | Data (layouts, backups) |
-|----------|----------------------|-------------------------|
-| **macOS** | `~/Library/Application Support/dev.lumenflow.app/` | `~/Library/Application Support/dev.lumenflow.app/` |
-| **Linux** | `~/.config/dev.lumenflow.app/` | `~/.local/share/dev.lumenflow.app/` |
-| **Windows** | `%APPDATA%\dev.lumenflow.app\` | `%APPDATA%\dev.lumenflow.app\` |
+| Platform    | Config (network.json)                              | Data (layouts, backups)                            |
+| ----------- | -------------------------------------------------- | -------------------------------------------------- |
+| **macOS**   | `~/Library/Application Support/dev.lumenflow.app/` | `~/Library/Application Support/dev.lumenflow.app/` |
+| **Linux**   | `~/.config/dev.lumenflow.app/`                     | `~/.local/share/dev.lumenflow.app/`                |
+| **Windows** | `%APPDATA%\dev.lumenflow.app\`                     | `%APPDATA%\dev.lumenflow.app\`                     |
 
 Network settings are persisted in `network.json` within the config directory.
 

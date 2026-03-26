@@ -59,7 +59,10 @@ impl SourceTracker {
         }
 
         if ip_a == 0
-            && self.source_a_ip.compare_exchange(0, ip, Ordering::AcqRel, Ordering::Acquire).is_ok()
+            && self
+                .source_a_ip
+                .compare_exchange(0, ip, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
         {
             self.source_a_physical.store(physical, Ordering::Relaxed);
             self.source_a_last_nanos.store(now_nanos, Ordering::Release);
@@ -67,7 +70,10 @@ impl SourceTracker {
         }
 
         if ip_b == 0
-            && self.source_b_ip.compare_exchange(0, ip, Ordering::AcqRel, Ordering::Acquire).is_ok()
+            && self
+                .source_b_ip
+                .compare_exchange(0, ip, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
         {
             self.source_b_physical.store(physical, Ordering::Relaxed);
             self.source_b_last_nanos.store(now_nanos, Ordering::Release);
@@ -78,7 +84,10 @@ impl SourceTracker {
         if ip_a != 0 && ip_a != ip {
             let last_a = self.source_a_last_nanos.load(Ordering::Acquire);
             if now_nanos.saturating_sub(last_a) >= STALE_TIMEOUT_NANOS
-                && self.source_a_ip.compare_exchange(ip_a, ip, Ordering::AcqRel, Ordering::Acquire).is_ok()
+                && self
+                    .source_a_ip
+                    .compare_exchange(ip_a, ip, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
             {
                 self.source_a_physical.store(physical, Ordering::Relaxed);
                 self.source_a_last_nanos.store(now_nanos, Ordering::Release);
@@ -90,7 +99,10 @@ impl SourceTracker {
         if ip_b != 0 && ip_b != ip {
             let last_b = self.source_b_last_nanos.load(Ordering::Acquire);
             if now_nanos.saturating_sub(last_b) >= STALE_TIMEOUT_NANOS
-                && self.source_b_ip.compare_exchange(ip_b, ip, Ordering::AcqRel, Ordering::Acquire).is_ok()
+                && self
+                    .source_b_ip
+                    .compare_exchange(ip_b, ip, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
             {
                 self.source_b_physical.store(physical, Ordering::Relaxed);
                 self.source_b_last_nanos.store(now_nanos, Ordering::Release);
@@ -108,12 +120,16 @@ impl SourceTracker {
         let ip_a = self.source_a_ip.load(Ordering::Acquire);
         if ip_a != 0 {
             let last = self.source_a_last_nanos.load(Ordering::Acquire);
-            if now_nanos.saturating_sub(last) < STALE_TIMEOUT_NANOS { count += 1; }
+            if now_nanos.saturating_sub(last) < STALE_TIMEOUT_NANOS {
+                count += 1;
+            }
         }
         let ip_b = self.source_b_ip.load(Ordering::Acquire);
         if ip_b != 0 {
             let last = self.source_b_last_nanos.load(Ordering::Acquire);
-            if now_nanos.saturating_sub(last) < STALE_TIMEOUT_NANOS { count += 1; }
+            if now_nanos.saturating_sub(last) < STALE_TIMEOUT_NANOS {
+                count += 1;
+            }
         }
         count
     }
@@ -122,8 +138,18 @@ impl SourceTracker {
     /// stale or empty slots are returned as `(0, 0)`.
     pub fn sources(&self, now_nanos: u64) -> [(u32, u8); 2] {
         [
-            self.load_slot(&self.source_a_ip, &self.source_a_physical, &self.source_a_last_nanos, now_nanos),
-            self.load_slot(&self.source_b_ip, &self.source_b_physical, &self.source_b_last_nanos, now_nanos),
+            self.load_slot(
+                &self.source_a_ip,
+                &self.source_a_physical,
+                &self.source_a_last_nanos,
+                now_nanos,
+            ),
+            self.load_slot(
+                &self.source_b_ip,
+                &self.source_b_physical,
+                &self.source_b_last_nanos,
+                now_nanos,
+            ),
         ]
     }
 
@@ -137,9 +163,17 @@ impl SourceTracker {
         self.source_b_last_nanos.store(0, Ordering::Release);
     }
 
-    fn load_slot(&self, ip_atom: &AtomicU32, phys_atom: &AtomicU8, ts_atom: &AtomicU64, now_nanos: u64) -> (u32, u8) {
+    fn load_slot(
+        &self,
+        ip_atom: &AtomicU32,
+        phys_atom: &AtomicU8,
+        ts_atom: &AtomicU64,
+        now_nanos: u64,
+    ) -> (u32, u8) {
         let ip = ip_atom.load(Ordering::Acquire);
-        if ip == 0 { return (0, 0); }
+        if ip == 0 {
+            return (0, 0);
+        }
         let last = ts_atom.load(Ordering::Acquire);
         if now_nanos.saturating_sub(last) < STALE_TIMEOUT_NANOS {
             (ip, phys_atom.load(Ordering::Relaxed))
@@ -150,7 +184,9 @@ impl SourceTracker {
 }
 
 impl Default for SourceTracker {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -161,18 +197,21 @@ mod tests {
     const IP_C: u32 = 0x0A000003;
     const T0: u64 = 1_000_000_000_000;
 
-    #[test] fn single_source_count_is_one() {
+    #[test]
+    fn single_source_count_is_one() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         assert_eq!(st.active_source_count(T0 + 1_000_000), 1);
     }
-    #[test] fn two_different_ips_count_is_two() {
+    #[test]
+    fn two_different_ips_count_is_two() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         st.record(IP_B, 0, T0 + 100);
         assert_eq!(st.active_source_count(T0 + 1_000_000), 2);
     }
-    #[test] fn third_ip_ignored_count_stays_two() {
+    #[test]
+    fn third_ip_ignored_count_stays_two() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         st.record(IP_B, 0, T0 + 100);
@@ -183,14 +222,16 @@ mod tests {
         assert!(ips.contains(&IP_A));
         assert!(ips.contains(&IP_B));
     }
-    #[test] fn source_goes_stale_after_10s() {
+    #[test]
+    fn source_goes_stale_after_10s() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         st.record(IP_B, 0, T0);
         assert_eq!(st.active_source_count(T0 + 9_999_999_999), 2);
         assert_eq!(st.active_source_count(T0 + STALE_TIMEOUT_NANOS), 0);
     }
-    #[test] fn stale_slot_reclaimed_by_new_ip() {
+    #[test]
+    fn stale_slot_reclaimed_by_new_ip() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         st.record(IP_B, 0, T0);
@@ -201,34 +242,42 @@ mod tests {
         let ips: Vec<u32> = srcs.iter().map(|s| s.0).filter(|&ip| ip != 0).collect();
         assert!(ips.contains(&IP_C));
     }
-    #[test] fn same_ip_different_physical_still_tracked() {
+    #[test]
+    fn same_ip_different_physical_still_tracked() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         st.record(IP_A, 1, T0 + 500);
         assert_eq!(st.active_source_count(T0 + 1_000), 1);
         assert_eq!(st.sources(T0 + 1_000)[0], (IP_A, 1));
     }
-    #[test] fn reset_clears_all() {
+    #[test]
+    fn reset_clears_all() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         st.record(IP_B, 1, T0);
         st.reset();
         assert_eq!(st.active_source_count(T0 + 1_000), 0);
     }
-    #[test] fn sources_returns_empty_when_fresh() {
+    #[test]
+    fn sources_returns_empty_when_fresh() {
         let st = SourceTracker::new();
         assert_eq!(st.sources(T0), [(0, 0), (0, 0)]);
     }
-    #[test] fn partial_staleness_reduces_count() {
+    #[test]
+    fn partial_staleness_reduces_count() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         st.record(IP_B, 0, T0 + 5_000_000_000);
         assert_eq!(st.active_source_count(T0 + STALE_TIMEOUT_NANOS), 1);
     }
-    #[test] fn update_refreshes_timestamp() {
+    #[test]
+    fn update_refreshes_timestamp() {
         let st = SourceTracker::new();
         st.record(IP_A, 0, T0);
         st.record(IP_A, 0, T0 + 9_000_000_000);
-        assert_eq!(st.active_source_count(T0 + 9_000_000_000 + 9_999_999_999), 1);
+        assert_eq!(
+            st.active_source_count(T0 + 9_000_000_000 + 9_999_999_999),
+            1
+        );
     }
 }

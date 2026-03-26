@@ -1,4 +1,7 @@
-import type { ArtNetProductDto, ProductPortDto } from "../components/DeviceList";
+import type {
+  ArtNetProductDto,
+  ProductPortDto,
+} from "../components/DeviceList";
 
 export interface MockUniverse {
   id: number;

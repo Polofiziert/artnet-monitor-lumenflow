@@ -30,7 +30,6 @@ pub async fn run(target: &str) -> Result<()> {
     );
     eprintln!("Press Ctrl+C to stop.\n");
 
-
     let mut tick = tokio::time::interval(Duration::from_secs(2));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 

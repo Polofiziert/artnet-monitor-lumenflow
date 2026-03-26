@@ -221,10 +221,7 @@ impl DeviceRegistry {
                     .max()
                     .unwrap_or_else(std::time::Instant::now);
 
-                let ip_address = binds
-                    .first()
-                    .map(|d| d.ip_address)
-                    .unwrap_or(bind_ip);
+                let ip_address = binds.first().map(|d| d.ip_address).unwrap_or(bind_ip);
 
                 let last_reply_source = binds.iter().find_map(|d| d.last_reply_source);
 
@@ -356,7 +353,11 @@ mod tests {
         registry.upsert(sample_device([10, 0, 0, 1], 1));
         registry.upsert(sample_device([10, 0, 0, 1], 2));
 
-        assert_eq!(registry.len(), 3, "same IP with different BindIndex = separate entries");
+        assert_eq!(
+            registry.len(),
+            3,
+            "same IP with different BindIndex = separate entries"
+        );
 
         let products = registry.list_products();
         assert_eq!(products.len(), 1, "same IP groups into one product");
@@ -437,7 +438,13 @@ mod tests {
         assert_eq!(devices[0].short_name, "NewName");
     }
 
-    fn swisson_like_bind(ip: [u8; 4], mac: [u8; 6], bind_index: u8, short: &str, universe: u16) -> DeviceInfo {
+    fn swisson_like_bind(
+        ip: [u8; 4],
+        mac: [u8; 6],
+        bind_index: u8,
+        short: &str,
+        universe: u16,
+    ) -> DeviceInfo {
         DeviceInfo {
             mac_address: mac,
             ip_address: Ipv4Addr::from(ip),

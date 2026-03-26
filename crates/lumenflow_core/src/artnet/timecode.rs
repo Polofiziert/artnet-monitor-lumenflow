@@ -45,12 +45,10 @@ pub struct ArtTimeCodePacket {
 /// Returns `ParseError::TooShort` if the payload is smaller than 19 bytes.
 pub fn parse_timecode(payload: &[u8]) -> Result<&ArtTimeCodePacket, ParseError> {
     let size = core::mem::size_of::<ArtTimeCodePacket>();
-    let packet = ArtTimeCodePacket::ref_from_prefix(payload).ok_or(
-        ParseError::TooShort {
-            expected: size,
-            actual: payload.len(),
-        },
-    )?;
+    let packet = ArtTimeCodePacket::ref_from_prefix(payload).ok_or(ParseError::TooShort {
+        expected: size,
+        actual: payload.len(),
+    })?;
 
     if packet.id != *ART_NET_HEADER {
         return Err(ParseError::InvalidHeader);

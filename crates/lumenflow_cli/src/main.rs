@@ -177,23 +177,23 @@ async fn main() -> anyhow::Result<()> {
             sync_target,
             periodic_poll_reply,
             verbose,
-        } => commands::virtual_console::run(
-            &name,
-            &ip,
-            bind.as_deref(),
-            universes,
-            rate,
-            &pattern,
-            &target,
-            physical,
-            sync_target.as_deref(),
-            periodic_poll_reply,
-            verbose,
-        )
-        .await,
-        Commands::SendAllPackets { target } => {
-            commands::send_all_packets::run(&target).await
+        } => {
+            commands::virtual_console::run(
+                &name,
+                &ip,
+                bind.as_deref(),
+                universes,
+                rate,
+                &pattern,
+                &target,
+                physical,
+                sync_target.as_deref(),
+                periodic_poll_reply,
+                verbose,
+            )
+            .await
         }
+        Commands::SendAllPackets { target } => commands::send_all_packets::run(&target).await,
         Commands::VirtualNode {
             profile,
             name,

@@ -2,7 +2,7 @@
 
 use zerocopy::{FromBytes, FromZeroes};
 
-use super::{ArtNetPacket, ParseError, ART_NET_HEADER, OpCode};
+use super::{ArtNetPacket, OpCode, ParseError, ART_NET_HEADER};
 
 /// Art-Net `OpSync` packet (14 bytes on wire).
 #[repr(C, packed)]

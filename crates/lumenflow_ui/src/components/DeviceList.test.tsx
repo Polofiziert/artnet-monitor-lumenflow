@@ -38,13 +38,17 @@ describe("DeviceList poll-reply pulse", () => {
     };
 
     const [products] = createSignal<ArtNetProductDto[]>([product]);
-    const [activity, setActivity] = createSignal<Record<string, PollReplyActivity>>({});
+    const [activity, setActivity] = createSignal<
+      Record<string, PollReplyActivity>
+    >({});
 
     render(() => (
       <DeviceList products={products} pollReplyActivity={activity} />
     ));
 
-    const dot = await screen.findByTestId(`poll-reply-dot-${product.product_id}`);
+    const dot = await screen.findByTestId(
+      `poll-reply-dot-${product.product_id}`
+    );
     expect(dot.classList.contains("scale-150")).toBe(false);
 
     setActivity({
@@ -178,7 +182,8 @@ describe("pending edit reconciliation", () => {
     };
 
     const key = "long_name";
-    const warning = "Node did not take the new value (latest ArtPollReply is unchanged).";
+    const warning =
+      "Node did not take the new value (latest ArtPollReply is unchanged).";
     const pending = {
       [key]: {
         productId: product.product_id,
@@ -236,7 +241,8 @@ describe("pending edit reconciliation", () => {
         expectedValue: "New Name",
         baselineValue: "Old Name",
         sentAtBundleCount: 1,
-        warning: "Node did not take the new value (latest ArtPollReply is unchanged).",
+        warning:
+          "Node did not take the new value (latest ArtPollReply is unchanged).",
         warningExpiresAtMs: 1000,
       },
     };
@@ -334,33 +340,35 @@ describe("IP cfg (ArtIpProgReply) inline editing", () => {
 
   it("reads ip prog config and renders it", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    (invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(async (cmd: string) => {
-      if (cmd === "send_ip_prog") {
-        return {
-          ip: "10.0.0.20",
-          subnet_mask: "255.255.255.0",
-          gateway: "10.0.0.1",
-          port: 6454,
-          dhcp_enabled: false,
-        };
+    (invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (cmd: string) => {
+        if (cmd === "send_ip_prog") {
+          return {
+            ip: "10.0.0.20",
+            subnet_mask: "255.255.255.0",
+            gateway: "10.0.0.1",
+            port: 6454,
+            dhcp_enabled: false,
+          };
+        }
+        if (cmd === "get_controllers") {
+          return [
+            {
+              ip: "10.0.0.99",
+              last_seen_at_ms: 1234,
+              talk_to_me: 0x06,
+              diag_priority: 0,
+              target_port_bottom: 0,
+              target_port_top: 32767,
+              esta_man: 0x5379,
+              oem: 0x2269,
+            },
+          ];
+        }
+        // DeviceList may call other commands on mount (e.g. get_diag_entries).
+        return [];
       }
-      if (cmd === "get_controllers") {
-        return [
-          {
-            ip: "10.0.0.99",
-            last_seen_at_ms: 1234,
-            talk_to_me: 0x06,
-            diag_priority: 0,
-            target_port_bottom: 0,
-            target_port_top: 32767,
-            esta_man: 0x5379,
-            oem: 0x2269,
-          },
-        ];
-      }
-      // DeviceList may call other commands on mount (e.g. get_diag_entries).
-      return [];
-    });
+    );
 
     const product: ArtNetProductDto = {
       product_id: "10.0.0.20|001122334455",
@@ -381,9 +389,13 @@ describe("IP cfg (ArtIpProgReply) inline editing", () => {
     const [productsSig] = createSignal<ArtNetProductDto[]>([product]);
     const [activity] = createSignal<Record<string, PollReplyActivity>>({});
 
-    render(() => <DeviceList products={productsSig} pollReplyActivity={activity} />);
+    render(() => (
+      <DeviceList products={productsSig} pollReplyActivity={activity} />
+    ));
 
-    expect(await screen.findByText("Controllers seen (ArtPoll senders)")).toBeTruthy();
+    expect(
+      await screen.findByText("Controllers seen (ArtPoll senders)")
+    ).toBeTruthy();
     expect(await screen.findByText("10.0.0.99")).toBeTruthy();
 
     await fireEvent.click(await screen.findByText("Node A Long [1]"));
@@ -422,10 +434,16 @@ describe("port name inline edit focus", () => {
       online: true,
     });
 
-    const [products, setProducts] = createSignal<ArtNetProductDto[]>([mk("Port 1")]);
-    const [activity, setActivity] = createSignal<Record<string, PollReplyActivity>>({});
+    const [products, setProducts] = createSignal<ArtNetProductDto[]>([
+      mk("Port 1"),
+    ]);
+    const [activity, setActivity] = createSignal<
+      Record<string, PollReplyActivity>
+    >({});
 
-    render(() => <DeviceList products={products} pollReplyActivity={activity} />);
+    render(() => (
+      <DeviceList products={products} pollReplyActivity={activity} />
+    ));
 
     // Select device so detail panel renders.
     await fireEvent.click(await screen.findByText("Node A Long [1]"));
@@ -437,7 +455,9 @@ describe("port name inline edit focus", () => {
     const portButton = await screen.findByText("Port 1");
     await fireEvent.dblClick(portButton);
 
-    const input = document.querySelector("input[autofocus]") as HTMLInputElement | null;
+    const input = document.querySelector(
+      "input[autofocus]"
+    ) as HTMLInputElement | null;
     expect(input).toBeTruthy();
     // JSDOM doesn't always apply autofocus; explicitly focus so we can assert retention.
     input!.focus();

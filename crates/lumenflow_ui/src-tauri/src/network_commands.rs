@@ -7,15 +7,14 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use lumenflow_core::engine::DiscoveryConfig;
 use lumenflow_core::artnet::ART_NET_PORT;
-use lumenflow_core::parse_discovery_targets_from_env;
+use lumenflow_core::engine::DiscoveryConfig;
 use lumenflow_core::network::{get_network_interfaces, resolve_interface_for_cidr};
+use lumenflow_core::parse_discovery_targets_from_env;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::watch;
-
 
 const NETWORK_CONFIG_FILENAME: &str = "network.json";
 const CONFIG_VERSION: u32 = 1;
@@ -121,7 +120,8 @@ fn load_settings(app: &AppHandle) -> NetworkSettingsDto {
 
 fn save_settings(app: &AppHandle, settings: &NetworkSettingsDto) -> Result<(), String> {
     let path = config_path(app)?;
-    let data = serde_json::to_string_pretty(settings).map_err(|e| format!("Serialize error: {e}"))?;
+    let data =
+        serde_json::to_string_pretty(settings).map_err(|e| format!("Serialize error: {e}"))?;
     std::fs::write(&path, data).map_err(|e| format!("Write error: {e}"))?;
     Ok(())
 }
@@ -202,12 +202,10 @@ pub fn derive_network_config(settings: &NetworkSettingsDto) -> NetworkConfig {
         }
     }
 
-    let subnet_broadcast_addr = subnet_targets
-        .first()
-        .and_then(|a| match a {
-            SocketAddr::V4(v) => Some(*v.ip()),
-            _ => None,
-        });
+    let subnet_broadcast_addr = subnet_targets.first().and_then(|a| match a {
+        SocketAddr::V4(v) => Some(*v.ip()),
+        _ => None,
+    });
 
     bind_targets.push(BindTarget {
         bind_addr,
@@ -289,15 +287,16 @@ pub async fn set_network_settings_cmd(
         let mut config = network_state.config.write();
         *config = s.clone();
     }
-    network_state.restart_tx.send(s).map_err(|e| e.to_string())?;
+    network_state
+        .restart_tx
+        .send(s)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Creates initial network state and loads persisted config.
 /// Returns (NetworkState for Tauri manage, Receiver for listener restart loop).
-pub fn init_network_state(
-    app: &AppHandle,
-) -> (NetworkState, watch::Receiver<NetworkSettingsDto>) {
+pub fn init_network_state(app: &AppHandle) -> (NetworkState, watch::Receiver<NetworkSettingsDto>) {
     let settings = load_settings(app);
     let (tx, rx) = watch::channel(settings.clone());
     let state = NetworkState {

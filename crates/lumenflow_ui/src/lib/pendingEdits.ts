@@ -50,19 +50,19 @@ export function reconcilePendingEdits(args: {
     } else if (p.field === "port_name") {
       const [_, bind, slot] = key.split(":");
       const port = device.ports.find(
-        (x) => x.bind_index === Number(bind) && x.slot === Number(slot),
+        (x) => x.bind_index === Number(bind) && x.slot === Number(slot)
       );
       actual = port?.label ?? "";
     } else if (p.field === "port_out") {
       const [_, bind, slot] = key.split(":");
       const port = device.ports.find(
-        (x) => x.bind_index === Number(bind) && x.slot === Number(slot),
+        (x) => x.bind_index === Number(bind) && x.slot === Number(slot)
       );
       actual = port ? String(port.output_universe) : "";
     } else if (p.field === "port_in") {
       const [_, bind, slot] = key.split(":");
       const port = device.ports.find(
-        (x) => x.bind_index === Number(bind) && x.slot === Number(slot),
+        (x) => x.bind_index === Number(bind) && x.slot === Number(slot)
       );
       actual = port?.input_universe != null ? String(port.input_universe) : "";
     }
@@ -76,7 +76,8 @@ export function reconcilePendingEdits(args: {
     }
 
     if (bundleCount > p.sentAtBundleCount && actual === p.baselineValue) {
-      const warning = "Node did not take the new value (latest ArtPollReply is unchanged).";
+      const warning =
+        "Node did not take the new value (latest ArtPollReply is unchanged).";
       if (p.warning !== warning) {
         // Long enough to read, short enough to not annoy.
         const WARNING_TTL_MS = 8000;
@@ -92,4 +93,3 @@ export function reconcilePendingEdits(args: {
 
   return { next, changed };
 }
-

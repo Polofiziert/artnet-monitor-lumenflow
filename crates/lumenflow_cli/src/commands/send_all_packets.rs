@@ -60,7 +60,16 @@ pub async fn run(target: &str) -> Result<()> {
     tokio::time::sleep(Duration::from_millis(PACKET_DELAY_MS)).await;
 
     // 5. ArtAddress
-    let pkt = build_art_address(0, 0, "Test", "Test Node", [0; 4], [0; 4], 0, ArtAddressCommand::AcNone);
+    let pkt = build_art_address(
+        0,
+        0,
+        "Test",
+        "Test Node",
+        [0; 4],
+        [0; 4],
+        0,
+        ArtAddressCommand::AcNone,
+    );
     socket.send_to(&pkt, target_addr).await?;
     count += 1;
     tokio::time::sleep(Duration::from_millis(PACKET_DELAY_MS)).await;

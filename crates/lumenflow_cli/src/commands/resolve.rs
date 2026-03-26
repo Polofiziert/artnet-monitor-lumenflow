@@ -78,7 +78,9 @@ mod tests {
     #[tokio::test]
     async fn resolve_broadcast_with_bom_on_host_still_ipv4() {
         let t = "\u{feff}10.255.255.255:6454";
-        let addr = resolve_target(t, 6454).await.expect("BOM must not force DNS");
+        let addr = resolve_target(t, 6454)
+            .await
+            .expect("BOM must not force DNS");
         assert_eq!(addr.ip().to_string(), "10.255.255.255");
         assert_eq!(addr.port(), 6454);
     }

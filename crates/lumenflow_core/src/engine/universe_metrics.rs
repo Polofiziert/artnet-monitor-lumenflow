@@ -90,9 +90,10 @@ impl UniverseMetrics {
         let last_reset = self.last_rate_reset_nanos.load(Ordering::Acquire);
         let elapsed = now_nanos.saturating_sub(last_reset);
         if elapsed >= RATE_WINDOW_NANOS
-            && self.last_rate_reset_nanos.compare_exchange(
-                last_reset, now_nanos, Ordering::AcqRel, Ordering::Relaxed
-            ).is_ok()
+            && self
+                .last_rate_reset_nanos
+                .compare_exchange(last_reset, now_nanos, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
         {
             return self.packets_this_window.swap(0, Ordering::AcqRel);
         }
@@ -108,7 +109,9 @@ impl UniverseMetrics {
     /// Returns `Disconnected` if no packet has ever been received.
     pub fn staleness(&self, now_nanos: u64) -> Staleness {
         let last = self.last_update_nanos.load(Ordering::Acquire);
-        if last == 0 { return Staleness::Disconnected; }
+        if last == 0 {
+            return Staleness::Disconnected;
+        }
         let elapsed = now_nanos.saturating_sub(last);
         if elapsed < STALE_THRESHOLD_NANOS {
             Staleness::Active
@@ -121,7 +124,9 @@ impl UniverseMetrics {
 }
 
 impl Default for UniverseMetrics {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -129,52 +134,60 @@ mod tests {
     use super::*;
     const T0: u64 = 1_000_000_000_000;
 
-    #[test] fn sequential_packets_no_errors() {
+    #[test]
+    fn sequential_packets_no_errors() {
         let m = UniverseMetrics::new();
         m.record_packet(1, T0);
         m.record_packet(2, T0 + 25_000_000);
         m.record_packet(3, T0 + 50_000_000);
         assert_eq!(m.sequence_errors(), 0);
     }
-    #[test] fn out_of_order_packet_increments_error() {
+    #[test]
+    fn out_of_order_packet_increments_error() {
         let m = UniverseMetrics::new();
         m.record_packet(1, T0);
         m.record_packet(3, T0 + 25_000_000);
         assert_eq!(m.sequence_errors(), 1);
     }
-    #[test] fn sequence_wraps_255_to_1_no_error() {
+    #[test]
+    fn sequence_wraps_255_to_1_no_error() {
         let m = UniverseMetrics::new();
         m.record_packet(254, T0);
         m.record_packet(255, T0 + 25_000_000);
         m.record_packet(1, T0 + 50_000_000);
         assert_eq!(m.sequence_errors(), 0);
     }
-    #[test] fn sequence_disabled_zero_no_tracking() {
+    #[test]
+    fn sequence_disabled_zero_no_tracking() {
         let m = UniverseMetrics::new();
         m.record_packet(0, T0);
         m.record_packet(0, T0 + 25_000_000);
         assert_eq!(m.sequence_errors(), 0);
     }
-    #[test] fn sequence_zero_incoming_skips_check() {
+    #[test]
+    fn sequence_zero_incoming_skips_check() {
         let m = UniverseMetrics::new();
         m.record_packet(5, T0);
         m.record_packet(0, T0 + 25_000_000);
         assert_eq!(m.sequence_errors(), 0);
     }
-    #[test] fn sequence_zero_last_skips_check() {
+    #[test]
+    fn sequence_zero_last_skips_check() {
         let m = UniverseMetrics::new();
         m.record_packet(0, T0);
         m.record_packet(5, T0 + 25_000_000);
         assert_eq!(m.sequence_errors(), 0);
     }
-    #[test] fn multiple_sequence_errors_accumulate() {
+    #[test]
+    fn multiple_sequence_errors_accumulate() {
         let m = UniverseMetrics::new();
         m.record_packet(1, T0);
         m.record_packet(5, T0 + 25_000_000);
         m.record_packet(10, T0 + 50_000_000);
         assert_eq!(m.sequence_errors(), 2);
     }
-    #[test] fn packets_per_second_counts_window() {
+    #[test]
+    fn packets_per_second_counts_window() {
         let m = UniverseMetrics::new();
         for i in 0..44u32 {
             m.record_packet(0, T0 + u64::from(i) * 22_000_000);
@@ -183,35 +196,41 @@ mod tests {
         assert_eq!(rate, 44);
         assert_eq!(m.packets_per_second(T0 + 1_100_000_001), 0);
     }
-    #[test] fn packets_per_second_partial_window() {
+    #[test]
+    fn packets_per_second_partial_window() {
         let m = UniverseMetrics::new();
         m.last_rate_reset_nanos.store(T0, Ordering::Release);
         m.record_packet(0, T0 + 10_000_000);
         m.record_packet(0, T0 + 20_000_000);
         assert_eq!(m.packets_per_second(T0 + 500_000_000), 2);
     }
-    #[test] fn staleness_active_within_threshold() {
+    #[test]
+    fn staleness_active_within_threshold() {
         let m = UniverseMetrics::new();
         m.record_packet(1, T0);
         assert_eq!(m.staleness(T0 + 100_000_000), Staleness::Active);
         assert_eq!(m.staleness(T0 + 799_999_999), Staleness::Active);
     }
-    #[test] fn staleness_stale_between_thresholds() {
+    #[test]
+    fn staleness_stale_between_thresholds() {
         let m = UniverseMetrics::new();
         m.record_packet(1, T0);
         assert_eq!(m.staleness(T0 + 800_000_000), Staleness::Stale);
         assert_eq!(m.staleness(T0 + 3_999_999_999), Staleness::Stale);
     }
-    #[test] fn staleness_disconnected_past_threshold() {
+    #[test]
+    fn staleness_disconnected_past_threshold() {
         let m = UniverseMetrics::new();
         m.record_packet(1, T0);
         assert_eq!(m.staleness(T0 + 4_000_000_000), Staleness::Disconnected);
     }
-    #[test] fn staleness_disconnected_when_never_updated() {
+    #[test]
+    fn staleness_disconnected_when_never_updated() {
         let m = UniverseMetrics::new();
         assert_eq!(m.staleness(T0), Staleness::Disconnected);
     }
-    #[test] fn total_packet_count_increments() {
+    #[test]
+    fn total_packet_count_increments() {
         let m = UniverseMetrics::new();
         m.record_packet(1, T0);
         m.record_packet(2, T0 + 25_000_000);
