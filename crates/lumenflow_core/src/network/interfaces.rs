@@ -114,6 +114,7 @@ fn derive_subnet_broadcast(
     (Some(subnet_str), Some(broadcast))
 }
 
+#[cfg(unix)]
 fn prefix_from_netmask(netmask: Ipv4Addr) -> u8 {
     let n = u32::from(netmask);
     n.count_ones() as u8
@@ -161,6 +162,7 @@ pub fn resolve_interface_for_cidr(cidr: &str) -> Result<Option<NetworkInterface>
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn test_prefix_from_netmask() {
         assert_eq!(prefix_from_netmask(Ipv4Addr::new(255, 255, 255, 0)), 24);
