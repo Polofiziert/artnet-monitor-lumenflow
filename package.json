@@ -1,6 +1,6 @@
 {
   "name": "lumenflow",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Professional Art-Net 4 monitoring and control software",
   "private": true,
   "license": "GPL-3.0-or-later OR MIT",
