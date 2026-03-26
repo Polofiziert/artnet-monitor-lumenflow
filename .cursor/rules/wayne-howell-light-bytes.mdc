@@ -1,0 +1,29 @@
+---
+description: LumenFlow diagnostics invariants for operator-focused Art-Net reliability and wire-truth behavior
+alwaysApply: true
+---
+
+# Light Bytes Diagnostics Invariants
+
+Apply these invariants to diagnostics logic, event wording, and monitoring UX:
+
+1. **Wire truth over optimistic state**  
+   Never present config/device state as final until confirmed by observed network evidence.
+
+2. **Collision vs fan-out must be explicit**  
+   Distinguish multiple sources on one universe (collision/merge risk) from one source feeding many outputs (fan-out).
+
+3. **Threshold-backed timing claims only**  
+   Jitter, staleness, and disconnect warnings must reference measurable thresholds and evidence.
+
+4. **Every warning provides a next action**  
+   Warning/error output must include at least one concrete remediation/check step.
+
+5. **Identity must be stable**  
+   Discovery and device tracking must not rely on source IP alone when stronger identity evidence exists.
+
+Source of truth:
+
+- `docs/development/LIGHT_BYTES_DIAGNOSTICS_STANDARD.md`
+- `docs/diagnostics/DIAGNOSTIC_EVENT_CATALOG.md`
+- `docs/diagnostics/TROUBLESHOOTING_PLAYBOOK.md`

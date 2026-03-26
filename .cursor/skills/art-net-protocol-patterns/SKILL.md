@@ -6,12 +6,16 @@ description: >-
   networks). Use when choreographing Poll/PollReply, ArtAddress verify-after-write,
   TOD/RDM pairing, DMX+Sync source rules, multi-controller behaviour, or when the
   user mentions Art-Net workflows, network reliability, jitter, or trust boundaries.
-  For wire layouts, parsers, and hex tests, use spec-compliance instead.
+  For wire layouts, parsers, and hex tests, use spec-compliance instead. For
+  diagnostics event wording and operator triage semantics, use
+  light-bytes-diagnostics.
 ---
 
 # Art-Net 4 Protocol Interaction Patterns
 
 This skill covers **how** Art-Net packets combine over time and topology: discovery windows, verification without application-level ACKs, merge policy, and **operational** behaviour on lossy or jittery UDP. It **does not** redefine field-by-field wire layouts; those belong in [spec-compliance](../spec-compliance/SKILL.md) and in [docs/art-net4.txt](../../../docs/art-net4.txt).
+
+Diagnostics severity language and remediation text should align with [light-bytes-diagnostics](../light-bytes-diagnostics/SKILL.md) and `docs/development/LIGHT_BYTES_DIAGNOSTICS_STANDARD.md`.
 
 ## When to use which skill
 

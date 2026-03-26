@@ -1,11 +1,13 @@
 ---
 name: apple-aesthetic-ui
-description: Refactor SolidJS components to match the LumenFlow Apple Pro-Lab dark aesthetic using Tailwind CSS. Use when styling UI components, building DMX grids, creating panels, or when the user mentions Pro-Lab, Apple aesthetic, dark mode UI, or visual polish.
+description: Refactor SolidJS components to match the LumenFlow Apple Pro-Lab dark aesthetic using Tailwind CSS. Use when styling UI components, building DMX grids, creating panels, or when the user mentions Pro-Lab, Apple aesthetic, dark mode UI, visual polish, or diagnostics readability.
 ---
 
 # Apple Pro-Lab Aesthetic
 
 Turn functional SolidJS components into polished, professional Pro-Lab interfaces using Tailwind CSS and fine-grained reactivity.
+
+For diagnostics-specific semantics (severity wording, evidence language, remediation text), pair this skill with `light-bytes-diagnostics`.
 
 ## Design Tokens
 
@@ -167,6 +169,13 @@ Swap `bg-teal` for `bg-amber` (warning) or `bg-red` (error).
 3. **Use `createStore`** for DMX arrays — SolidJS tracks per-index mutations automatically.
 4. **Use `<For>`** (keyed) for channel lists, never `.map()` — `.map()` recreates all nodes on any change.
 5. **Batch high-frequency updates** with `batch(() => { ... })` when setting multiple channels at once from IPC.
+
+## Diagnostics Cognition Rules
+
+1. Status colors must remain semantically consistent (`teal=ok`, `amber=warning`, `red=error`).
+2. Warning indicators should not shift surrounding layout when state changes.
+3. Tooltips for status indicators should include short evidence + next action text.
+4. Dense views should surface uncertainty (`pending`, `unconfirmed`) with explicit labels, not color alone.
 
 ## Refactoring Checklist
 

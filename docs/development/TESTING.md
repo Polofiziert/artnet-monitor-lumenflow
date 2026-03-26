@@ -592,6 +592,40 @@ git checkout your-branch
 
 ---
 
+## 11. Guidance Sync Quality Gate
+
+Use this checklist for any change that touches protocol behavior, IPC payloads, diagnostics semantics, or Cursor guidance assets.
+
+### Change-coupling checklist
+
+- Protocol parser/builder/dispatch changed:
+  - Update `docs/protocol/ARTNET_COMPLIANCE_MATRIX.md`
+  - Update relevant protocol tests and references in `TESTS.md`
+- IPC command/event/payload/DTO changed:
+  - Update `docs/IPC_API_CONTRACT.md`
+  - Verify frontend/backend parse compatibility in tests
+- Diagnostics severity/wording/thresholds changed:
+  - Update `docs/development/LIGHT_BYTES_DIAGNOSTICS_STANDARD.md`
+  - Update `docs/diagnostics/DIAGNOSTIC_EVENT_CATALOG.md`
+  - Update `docs/diagnostics/TROUBLESHOOTING_PLAYBOOK.md`
+- Cursor rule/skill changed:
+  - Keep `AGENTS.md` source map and boundaries consistent
+  - Ensure skill/rule references resolve to canonical docs in `docs/INDEX.md`
+
+### Review requirement
+
+- A change in any coupled area is incomplete until code + docs + tests + guidance references are aligned in the same PR.
+
+### Minimum validation commands
+
+```bash
+cargo test --all
+pnpm run test
+pnpm run test:wireshark
+```
+
+---
+
 **For detailed implementation, see [TESTS.md](../TESTS.md)**
 
 **Questions?** See [CONTRIBUTING.md](../CONTRIBUTING.md#testing-requirements) for testing guidelines.
