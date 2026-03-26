@@ -39,14 +39,37 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
-      ...tseslint.configs.recommended.rules,
+      // Note: we only apply TypeScript plugin rules in TS blocks below.
 
-      // TypeScript provides better undefined checks.
+      // Base rule set is used for JS/TS; TS-specific strictness comes below.
       "no-undef": "off",
 
-      // Strict TypeScript rules
+      // Code quality
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-debugger": "warn",
+      "no-empty": ["error", { allowEmptyCatch: true }],
+    },
+  },
+  {
+    files: ["crates/lumenflow_ui/src/**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+        project: "./tsconfig.eslint.json",
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
+    rules: {
+      ...tseslint.configs.recommended.rules,
+
+      // Strict TypeScript rules (type-aware; backed by project)
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/explicit-module-boundary-types": "off",
+
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -55,11 +78,6 @@ export default [
           varsIgnorePattern: "^_",
         },
       ],
-
-      // Code quality
-      "no-console": ["warn", { allow: ["warn", "error"] }],
-      "no-debugger": "warn",
-      "no-empty": ["error", { allowEmptyCatch: true }],
     },
   },
   {
