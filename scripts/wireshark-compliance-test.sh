@@ -54,7 +54,12 @@ fi
 
 # Send all packet types
 cd "$PROJECT_ROOT"
-cargo run -p lumenflow_cli -- send-all-packets --target 127.0.0.1 2>/dev/null || true
+if ! cargo run -p lumenflow_cli -- send-all-packets --target 127.0.0.1; then
+    echo "FAIL: send-all-packets command failed; no Art-Net traffic emitted."
+    kill -INT "$TCPDUMP_PID" 2>/dev/null || true
+    wait "$TCPDUMP_PID" 2>/dev/null || true
+    exit 1
+fi
 
 # Wait for packets to be captured
 sleep 1
