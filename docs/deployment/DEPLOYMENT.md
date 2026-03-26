@@ -8,6 +8,28 @@ LumenFlow follows semantic versioning and a 3-tier release process:
 - **Stable Release:** Production-ready versions
 - **Long-Term Support (LTS):** Maintenance versions for critical patches
 
+## CI/CD Release Process
+
+LumenFlow release binaries are built by GitHub Actions workflow `release.yml`.
+
+Current release policy:
+
+- Triggered by version tag push matching `v*` (for example `v0.2.1`)
+- Builds artifacts for Linux, Windows, macOS Intel, and macOS Apple Silicon
+- Uploads artifacts to GitHub Release assets
+- Unsigned artifacts by default (signing/notarization can be enabled later with secrets)
+
+Recommended release sequence:
+
+1. Merge `develop` into `main` with green checks.
+2. Bump versions in `package.json`, workspace `Cargo.toml`, and `tauri.conf.json`.
+3. Create and push tag on `main`.
+4. Verify workflow output and attached release assets.
+
+For full contributor/operator flow (including `ci:heavy` usage), see:
+
+- [`docs/development/CI_CD_WORKFLOW.md`](../development/CI_CD_WORKFLOW.md)
+
 ## Building for Distribution
 
 ### Desktop Application (Tauri)

@@ -384,29 +384,17 @@ pnpm run test:wireshark
 
 ## 4. CI/CD Pipeline
 
-GitHub Actions automatically runs all tests on:
+LumenFlow uses a split pipeline model:
 
-- Every push to `main` and `develop`
-- Every pull request
+- **Light required checks** (`.github/workflows/ci.yml`) for every PR/push to `main` and `develop`
+- **Heavy optional checks** (`.github/workflows/ci-heavy.yml`) via `ci:heavy` label, schedule, or manual run
+- **Release builds** (`.github/workflows/release.yml`) on version tags (`v*`)
 
-**Jobs (parallel execution):**
+This design keeps day-to-day CI deterministic while preserving deep validation for release confidence.
 
-1. Rust Quality (clippy, rustfmt, audit)
-2. Rust Tests (multi-platform)
-3. Advanced Rust Tests (Loom, Chaos, Property-based)
-4. Wireshark Art-Net Compliance (Linux only; validates wire format)
-5. TypeScript Quality (ESLint, type-check)
-6. TypeScript Tests (Vitest, coverage)
-7. UI Visual Regression (Playwright, cross-browser)
-8. Build (only if all tests pass)
+For exact workflow behavior and release steps, see:
 
-**Build gets blocked if:**
-
-- Any test fails
-- Code coverage drops below thresholds
-- Visual regression detected (> 0.5% pixel diff)
-- Clippy warnings present
-- Security audit finds vulnerabilities
+- [`docs/development/CI_CD_WORKFLOW.md`](./CI_CD_WORKFLOW.md)
 
 ---
 

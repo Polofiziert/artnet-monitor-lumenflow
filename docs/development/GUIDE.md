@@ -24,7 +24,7 @@ rustup update
 rustup component add rustfmt clippy
 
 # Install Node.js (via Homebrew)
-brew install node@18
+brew install node@20
 npm install -g pnpm@8
 
 # Install project dependencies
@@ -66,6 +66,18 @@ pnpm run type-check
 # Full quality check (before commit)
 pnpm run lint
 ```
+
+### CI/CD Workflow
+
+Use the standardized CI/CD flow documented in:
+
+- [`docs/development/CI_CD_WORKFLOW.md`](./CI_CD_WORKFLOW.md)
+
+Highlights:
+
+- PR/push required checks run in light CI
+- heavy checks run via PR label `ci:heavy`, schedule, or manual dispatch
+- releases build on version tags (`v*`)
 
 ## Project Structure
 
