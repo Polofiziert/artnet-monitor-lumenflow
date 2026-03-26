@@ -1,0 +1,92 @@
+name: CI - Heavy Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: "0 2 * * *" # daily 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-heavy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui-visual-regression:
+    name: UI Visual Regression (Playwright)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || contains(join(github.event.pull_request.labels.*.name, ','), 'ci:heavy')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
+      - name: Run UI tests
+        run: pnpm run test:ui
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+  wireshark-compliance:
+    name: Wireshark Art-Net Compliance
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || contains(join(github.event.pull_request.labels.*.name, ','), 'ci:heavy')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install tshark and tcpdump
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get install -y tshark tcpdump
+
+      - name: Create negative test pcap
+        run: python3 scripts/create-malformed-negative-pcap.py
+
+      - name: Run Wireshark compliance test (requires sudo capture)
+        run: sudo ./scripts/wireshark-compliance-test.sh
+
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || contains(join(github.event.pull_request.labels.*.name, ','), 'ci:heavy')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run benchmarks
+        run: cargo bench --all -- --output-format bencher | tee output.txt
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-bench-output
+          path: output.txt
