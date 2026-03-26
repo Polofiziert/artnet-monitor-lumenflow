@@ -29,7 +29,6 @@ jobs:
           sudo apt-get install -y \
             pkg-config \
             libgtk-3-dev \
-            libwebkit2gtk-4.0-dev \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
@@ -65,7 +64,6 @@ jobs:
           sudo apt-get install -y \
             pkg-config \
             libgtk-3-dev \
-            libwebkit2gtk-4.0-dev \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
@@ -86,7 +84,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 8.15.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -118,7 +116,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 8.15.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -150,7 +148,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 8.15.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -172,7 +170,6 @@ jobs:
           sudo apt-get install -y \
             pkg-config \
             libgtk-3-dev \
-            libwebkit2gtk-4.0-dev \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
