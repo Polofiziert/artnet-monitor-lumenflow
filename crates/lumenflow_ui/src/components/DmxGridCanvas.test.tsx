@@ -99,4 +99,3 @@ describe("DmxGridCanvas helpers", () => {
     expect(ctx.stroke).toHaveBeenCalled();
   });
 });
-

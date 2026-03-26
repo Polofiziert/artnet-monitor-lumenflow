@@ -61,7 +61,10 @@ describe("ChannelInspector formatting and origin", () => {
     channels[1] = 255;
     const [ch] = createSignal(channels);
     const [fmt, setFmt] = createSignal<"hex" | "binary" | "percent">("hex");
-    const [origin] = createSignal({ sourceIp: "10.0.0.9", mergeMode: "HTP" as const });
+    const [origin] = createSignal({
+      sourceIp: "10.0.0.9",
+      mergeMode: "HTP" as const,
+    });
 
     render(() => (
       <ChannelInspector
@@ -87,4 +90,3 @@ describe("ChannelInspector formatting and origin", () => {
     expect(await screen.findByText("100 %")).toBeTruthy();
   });
 });
-

@@ -48,7 +48,9 @@ describe("DeviceList inline editing", () => {
     };
 
     const [products] = createSignal<ArtNetProductDto[]>([product]);
-    render(() => <DeviceList products={products} onReadCurrent={onReadCurrent} />);
+    render(() => (
+      <DeviceList products={products} onReadCurrent={onReadCurrent} />
+    ));
 
     fireEvent.click(await screen.findByText(/Node Long/));
 
@@ -103,4 +105,3 @@ describe("DeviceList inline editing", () => {
     expect(invoke).toHaveBeenCalled();
   });
 });
-

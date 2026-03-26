@@ -14,8 +14,11 @@ describe("DmxGridCanvas event handlers", () => {
       observe() {}
       disconnect() {}
     } as unknown as typeof ResizeObserver;
-    window.requestAnimationFrame = vi.fn(() => 1) as unknown as typeof requestAnimationFrame;
-    window.cancelAnimationFrame = vi.fn() as unknown as typeof cancelAnimationFrame;
+    window.requestAnimationFrame = vi.fn(
+      () => 1
+    ) as unknown as typeof requestAnimationFrame;
+    window.cancelAnimationFrame =
+      vi.fn() as unknown as typeof cancelAnimationFrame;
   });
 
   afterEach(() => {
@@ -55,4 +58,3 @@ describe("DmxGridCanvas event handlers", () => {
     expect(onSelect).toHaveBeenCalled();
   });
 });
-

@@ -42,4 +42,3 @@ describe("ChannelHistoryStore", () => {
     expect(store.getHistory(1, 0)).toBeNull();
   });
 });
-

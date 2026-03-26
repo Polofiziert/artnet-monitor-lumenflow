@@ -47,4 +47,3 @@ describe("themePalette", () => {
     expect(nd.bg).not.toBe(nl.bg);
   });
 });
-

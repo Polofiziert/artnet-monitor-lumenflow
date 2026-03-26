@@ -57,9 +57,15 @@ describe("DeviceList ports + URLs flows", () => {
     fireEvent.click(screen.getByText("Fetch URLs"));
 
     await waitFor(() => {
-      expect(screen.getByText(/Product: https:\/\/example\.com\/product/)).toBeTruthy();
-      expect(screen.getByText(/Guide: https:\/\/example\.com\/guide/)).toBeTruthy();
-      expect(screen.getByText(/Support: https:\/\/example\.com\/support/)).toBeTruthy();
+      expect(
+        screen.getByText(/Product: https:\/\/example\.com\/product/)
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/Guide: https:\/\/example\.com\/guide/)
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/Support: https:\/\/example\.com\/support/)
+      ).toBeTruthy();
     });
   });
 
@@ -97,13 +103,17 @@ describe("DeviceList ports + URLs flows", () => {
     fireEvent.click(screen.getByText("ports"));
 
     // Output edit: same net/subnet (0:0:*) to pass safety check.
-    fireEvent.dblClick(screen.getByTitle("Double-click to edit output port address"));
+    fireEvent.dblClick(
+      screen.getByTitle("Double-click to edit output port address")
+    );
     const outInput = screen.getByDisplayValue("0:0:2") as HTMLInputElement;
     fireEvent.input(outInput, { target: { value: "0:0:3" } });
     fireEvent.keyDown(outInput, { key: "Enter" });
 
     // Input edit.
-    fireEvent.dblClick(screen.getByTitle("Double-click to edit input port address"));
+    fireEvent.dblClick(
+      screen.getByTitle("Double-click to edit input port address")
+    );
     const inInput = screen.getByDisplayValue("0:0:1") as HTMLInputElement;
     fireEvent.input(inInput, { target: { value: "0:0:4" } });
     fireEvent.keyDown(inInput, { key: "Enter" });
@@ -111,4 +121,3 @@ describe("DeviceList ports + URLs flows", () => {
     expect(invoke).toHaveBeenCalled();
   });
 });
-

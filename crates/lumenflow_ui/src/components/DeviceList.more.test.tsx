@@ -70,15 +70,17 @@ describe("DeviceList extra coverage", () => {
     fireEvent.input(screen.getByTestId("add-device-name"), {
       target: { value: "FOH Node" },
     });
-    expect((screen.getByTestId("add-device-submit") as HTMLButtonElement).disabled).toBe(
-      false
-    );
+    expect(
+      (screen.getByTestId("add-device-submit") as HTMLButtonElement).disabled
+    ).toBe(false);
 
     fireEvent.click(screen.getByTestId("add-device-submit"));
     expect(onAddManualDevice).toHaveBeenCalledWith("192.168.0.5", "FOH Node");
 
     // Dialog should be gone.
-    expect(screen.queryByRole("dialog", { name: "Add device manually" })).toBeNull();
+    expect(
+      screen.queryByRole("dialog", { name: "Add device manually" })
+    ).toBeNull();
 
     // Re-open and close via backdrop click and Escape.
     fireEvent.click(await screen.findByTestId("add-device-manually"));
@@ -86,14 +88,17 @@ describe("DeviceList extra coverage", () => {
       name: "Add device manually",
     });
     fireEvent.click(dialog2); // backdrop click
-    expect(screen.queryByRole("dialog", { name: "Add device manually" })).toBeNull();
+    expect(
+      screen.queryByRole("dialog", { name: "Add device manually" })
+    ).toBeNull();
 
     fireEvent.click(await screen.findByTestId("add-device-manually"));
     const dialog3 = await screen.findByRole("dialog", {
       name: "Add device manually",
     });
     fireEvent.keyDown(dialog3, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Add device manually" })).toBeNull();
+    expect(
+      screen.queryByRole("dialog", { name: "Add device manually" })
+    ).toBeNull();
   });
 });
-

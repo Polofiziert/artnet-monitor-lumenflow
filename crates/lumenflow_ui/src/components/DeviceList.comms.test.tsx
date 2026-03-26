@@ -60,4 +60,3 @@ describe("DeviceList comms/diagnostics tabs", () => {
     expect(screen.getByText("HIGH")).toBeTruthy();
   });
 });
-

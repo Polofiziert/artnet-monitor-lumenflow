@@ -12,7 +12,9 @@ describe("SourceSyncPanel", () => {
     ]);
     const [active] = createSignal(true);
 
-    render(() => <SourceSyncPanel sourceIps={sourceIps} artSyncActive={active} />);
+    render(() => (
+      <SourceSyncPanel sourceIps={sourceIps} artSyncActive={active} />
+    ));
 
     expect(await screen.findByText("Source IPs")).toBeTruthy();
     expect(screen.getByText("10.0.0.10")).toBeTruthy();
@@ -23,10 +25,13 @@ describe("SourceSyncPanel", () => {
   });
 
   it("renders ArtSync INACTIVE", () => {
-    const [sourceIps] = createSignal([{ ip: "10.0.0.10", role: "master" as const }]);
+    const [sourceIps] = createSignal([
+      { ip: "10.0.0.10", role: "master" as const },
+    ]);
     const [active] = createSignal(false);
-    render(() => <SourceSyncPanel sourceIps={sourceIps} artSyncActive={active} />);
+    render(() => (
+      <SourceSyncPanel sourceIps={sourceIps} artSyncActive={active} />
+    ));
     expect(screen.getByText("INACTIVE")).toBeTruthy();
   });
 });
-

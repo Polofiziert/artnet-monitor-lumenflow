@@ -39,7 +39,9 @@ describe("Sparkline", () => {
 
   beforeEach(() => {
     const ctx = makeMockCtx();
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => ctx);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      () => ctx
+    );
     vi.stubGlobal("devicePixelRatio", 1);
   });
 
@@ -56,7 +58,8 @@ describe("Sparkline", () => {
       rafCbs.push(cb);
       return rafCbs.length;
     }) as unknown as typeof requestAnimationFrame;
-    globalThis.cancelAnimationFrame = vi.fn() as unknown as typeof cancelAnimationFrame;
+    globalThis.cancelAnimationFrame =
+      vi.fn() as unknown as typeof cancelAnimationFrame;
 
     render(() => (
       <Sparkline data={data} width={40} height={10} bgColor="#111111" />
@@ -67,10 +70,11 @@ describe("Sparkline", () => {
     rafCbs[0]!(100);
 
     // Canvas background + stroke path should have been touched.
-    const getCtx = HTMLCanvasElement.prototype.getContext as unknown as ReturnType<
-      typeof vi.fn
+    const getCtx = HTMLCanvasElement.prototype
+      .getContext as unknown as ReturnType<typeof vi.fn>;
+    const usedCtx = getCtx.mock.results[0]!.value as ReturnType<
+      typeof makeMockCtx
     >;
-    const usedCtx = getCtx.mock.results[0]!.value as ReturnType<typeof makeMockCtx>;
     expect(usedCtx.fillRect).toHaveBeenCalled();
     expect(usedCtx.stroke).toHaveBeenCalled();
     expect(usedCtx.fill).toHaveBeenCalled();
@@ -87,11 +91,11 @@ describe("Sparkline", () => {
     render(() => <Sparkline data={data} />);
     rafCbs[0]!(100);
 
-    const getCtx = HTMLCanvasElement.prototype.getContext as unknown as ReturnType<
-      typeof vi.fn
+    const getCtx = HTMLCanvasElement.prototype
+      .getContext as unknown as ReturnType<typeof vi.fn>;
+    const usedCtx = getCtx.mock.results[0]!.value as ReturnType<
+      typeof makeMockCtx
     >;
-    const usedCtx = getCtx.mock.results[0]!.value as ReturnType<typeof makeMockCtx>;
     expect(usedCtx.stroke).not.toHaveBeenCalled();
   });
 });
-
