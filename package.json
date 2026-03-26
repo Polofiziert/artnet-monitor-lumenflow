@@ -19,7 +19,7 @@
     "build:rust": "cargo build --release -p lumenflow_core -p lumenflow_ui",
     "dev:ui": "vite",
     "preview": "vite preview",
-    "lint": "eslint . --ext .ts,.tsx --fix && cargo clippy --all-targets --all-features -- -D warnings",
+    "lint": "eslint . --fix && cargo clippy --all-targets --all-features -- -D warnings",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
