@@ -51,6 +51,7 @@ pnpm run build
 
 ## 📚 Documentation
 
+- [Documentation Index](docs/INDEX.md)
 - [Architecture Overview](docs/architecture/ARCHITECTURE.md)
 - [Development Guide](docs/development/GUIDE.md)
 - [Performance Tuning](docs/deployment/PERFORMANCE.md)
