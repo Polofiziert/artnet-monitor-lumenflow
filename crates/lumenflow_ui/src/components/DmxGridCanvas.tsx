@@ -253,6 +253,8 @@ const DmxGridCanvas: Component<DmxGridCanvasProps> = (props) => {
   let rafId: number | undefined;
   let frameCount = 0;
   let containerWidth = 0;
+  const getHistory = (universeId: number, ch: number) =>
+    globalHistory.getHistory(universeId, ch);
 
   function cellFromMouse(e: MouseEvent): number | null {
     if (!canvasRef) return null;
@@ -297,7 +299,7 @@ const DmxGridCanvas: Component<DmxGridCanvasProps> = (props) => {
       hovered: props.hoveredChannel(),
       selected: props.selectedChannel(),
       resolvedTheme: props.resolvedTheme(),
-      getHistory: globalHistory.getHistory.bind(globalHistory),
+      getHistory,
     });
   }
 

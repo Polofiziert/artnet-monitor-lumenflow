@@ -8,6 +8,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     include: ["crates/lumenflow_ui/src/**/*.{test,spec}.{ts,tsx}"],
+    setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
@@ -18,6 +19,7 @@ export default defineConfig({
     },
   },
   resolve: {
+    dedupe: ["solid-js", "solid-js/web", "solid-js/store"],
     alias: {
       "@": path.resolve(__dirname, "./crates/lumenflow_ui/src"),
     },
