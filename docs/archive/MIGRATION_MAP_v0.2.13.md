@@ -17,9 +17,11 @@ This map defines archive targets for redundant or historical docs. It is intenti
 - `docs/development/ARTNET_DISCOVERY_ROOT_CAUSE_ANALYSIS.md` -> `docs/archive/rca/ARTNET_DISCOVERY_ROOT_CAUSE_ANALYSIS.md`
 - `docs/development/WIRESHARK_MALFORMED_REVIEW.md` -> `docs/archive/rca/WIRESHARK_MALFORMED_REVIEW.md`
 - `docs/development/SPRINT_PLAN_HUMAN_NOTES_0.2.md` -> `docs/archive/plans/SPRINT_PLAN_HUMAN_NOTES_0.2.md`
+- `docs/PLAN_JITTER_CHART.md` -> `docs/archive/plans/PLAN_JITTER_CHART.md`
 
 ## Explicit Non-Moves (Must Stay Canonical)
 
+- `docs/development/ARTNET_SPEC_ASSESSMENT.md` (remains active as the gap tracker for this cycle)
 - `docs/art-net4.txt`
 - `docs/development/ARTNET_PROTOCOL_PATTERNS_DMXW_COMPLIANCE.md`
 - `docs/IPC_API_CONTRACT.md`

@@ -43,5 +43,5 @@ On macOS, the Help submenu is set as the app Help menu (`setAsHelpMenuForNSApp`)
 
 ## References
 
-- `docs/development/SPRINT_PLAN_HUMAN_NOTES_0.2.md` §2.8 (M1)
+- `docs/archive/plans/SPRINT_PLAN_HUMAN_NOTES_0.2.md` §2.8 (M1)
 - Tauri: [Window Menu](https://v2.tauri.app/learn/window-menu/), `core:menu:default`, `setAsHelpMenuForNSApp`

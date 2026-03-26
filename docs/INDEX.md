@@ -14,6 +14,7 @@ This index defines the documentation source-of-truth model for LumenFlow and pro
 
 ## Active Documents
 
+- Active gap tracker this cycle: `docs/development/ARTNET_SPEC_ASSESSMENT.md`
 - Developer setup: `docs/development/SETUP.md`
 - Developer workflow: `docs/development/GUIDE.md`
 - API docs: `docs/api/`
