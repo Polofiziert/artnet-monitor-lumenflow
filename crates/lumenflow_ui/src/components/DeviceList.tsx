@@ -312,7 +312,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       ? (pollActivityFor(selectedDevice()!.product_id)?.bundleCount ?? 0)
       : 0;
 
-  const beginEdit = (key: string, currentValue: string) => {
+  const beginEdit = (_key: string, currentValue: string) => {
     // Clear stale errors when starting a new edit, otherwise a prior failure (e.g. ArtIpProg)
     // can appear to be caused by the current action.
     setFieldErrors({});
@@ -1811,15 +1811,15 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                         class="w-full truncate text-left font-mono text-secondary hover:text-teal"
                                         title="Double-click to edit input port address"
                                         onDblClick={() => {
+                                          const inputUniverse =
+                                            p().input_universe ?? null;
                                           beginEdit(
                                             inFieldKey(
                                               p().bind_index,
                                               p().slot
                                             ),
-                                            p().input_universe != null
-                                              ? formatPortAddress(
-                                                  p().input_universe
-                                                )
+                                            inputUniverse != null
+                                              ? formatPortAddress(inputUniverse)
                                               : ""
                                           );
                                           setEditingPortKey(
@@ -1827,11 +1827,13 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                           );
                                         }}
                                       >
-                                        {p().input_universe != null
-                                          ? formatPortAddress(
-                                              p().input_universe
-                                            )
-                                          : "—"}
+                                        {(() => {
+                                          const inputUniverse =
+                                            p().input_universe ?? null;
+                                          return inputUniverse != null
+                                            ? formatPortAddress(inputUniverse)
+                                            : "—";
+                                        })()}
                                       </button>
                                     }
                                   >

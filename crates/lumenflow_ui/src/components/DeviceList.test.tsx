@@ -4,6 +4,7 @@ import { createSignal } from "solid-js";
 import DeviceList, { type ArtNetProductDto } from "./DeviceList";
 import type { PollReplyActivity } from "../hooks/useDevices";
 import { reconcilePendingEdits } from "../lib/pendingEdits";
+import type { PendingEdit } from "../lib/pendingEdits";
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => () => {}),
@@ -313,10 +314,13 @@ describe("pending edit reconciliation", () => {
 
     const activityById: Record<string, PollReplyActivity> = {
       [productId]: {
+        pulseNonce: 1,
         ipAddress: "10.0.0.20",
         bindIp: "10.0.0.1",
         shortName: "Node",
         lastReceivedAtMs: 0,
+        lastBindIndex: 1,
+        bundleWindowMs: 100,
         bundleCount: 2,
       },
     };
