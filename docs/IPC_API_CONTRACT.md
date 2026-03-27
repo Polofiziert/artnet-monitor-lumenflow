@@ -53,7 +53,7 @@ This document defines the complete contract between the Tauri/Rust backend and t
 | `get_diag_entries`           | FE → BE   | —                                            | `DiagEntryDto[]`        | Snapshot of diagnostic log. Used for initial load; `diag-entry` event for live updates.                                                                                         |
 | `get_controllers`            | FE → BE   | —                                            | `ControllerSeenDto[]`   | List of controllers observed via incoming ArtPoll packets (best-effort; may not be nodes).                                                                                      |
 | `send_ip_prog`               | FE → BE   | `IpProgParams`                               | `IpProgReplyDto`        | Send ArtIpProg unicast to target device. Read-only or programming mode.                                                                                                         |
-| `send_art_address`           | FE → BE   | `ArtAddressParams`                           | `void`                  | Send ArtAddress unicast to program names + per-port In/Out. Verify via subsequent ArtPollReply.                                                                                 |
+| `send_art_address`           | FE → BE   | `ArtAddressParams`                           | `void`                  | Send ArtAddress unicast to program names, per-port In/Out, and LED indicator commands (`identify`/`mute`/`normal`). Verify via subsequent ArtPollReply.                       |
 | `request_device_url`         | FE → BE   | `{ target_ip, esta_man, oem, request_type }` | `string`                | Fetch product/user guide/support URL via ArtDataRequest. Use `oem` (not `oem_code`) as key; value from `ArtNetProductDto.oem_code` (or `DeviceInfoDto` for flat `get_devices`). |
 | `get_network_interfaces_cmd` | FE → BE   | —                                            | `NetworkInterfaceDto[]` | List IPv4 network interfaces (name, ip, subnet, broadcast). Used for NIC selection in Settings.                                                                                 |
 | `get_network_settings_cmd`   | FE → BE   | —                                            | `NetworkSettingsDto`    | Persisted network config (interface mode, CIDR, discovery targets).                                                                                                             |
@@ -226,6 +226,7 @@ interface ArtNetProductDto {
   product_id: string; // stable "bindIp|MACHEX" (no colons in MAC segment)
   bind_ip: string;
   ip_address: string;
+  primary_bind_index: number; // canonical bind page for node-level ArtAddress actions
   transport_addr?: string | null; // Optional management transport override (NAT/port mapping)
   mac_address: string;
   short_name: string;
@@ -234,6 +235,8 @@ interface ArtNetProductDto {
   oem_code: number;
   firmware_version: number;
   node_report: string;
+  status1: number; // ArtPollReply Status1, bits 7..6 = indicator mode
+  status2: number; // ArtPollReply Status2, bit 5 = squawking
   ports: ProductPortDto[];
   online: boolean;
 }
@@ -336,6 +339,7 @@ interface ArtAddressParams {
   long_name?: string | null;
   set_output_universe?: { slot: number; universe: number } | null;
   set_input_universe?: { slot: number; universe: number } | null;
+  led_command?: "identify" | "mute" | "normal" | null;
 }
 ```
 

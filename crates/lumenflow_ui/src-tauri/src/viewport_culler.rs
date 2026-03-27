@@ -139,6 +139,7 @@ pub struct ArtNetProductDto {
     pub product_id: String,
     pub bind_ip: String,
     pub ip_address: String,
+    pub primary_bind_index: u8,
     pub mac_address: String,
     pub short_name: String,
     pub long_name: String,
@@ -146,6 +147,8 @@ pub struct ArtNetProductDto {
     pub oem_code: u16,
     pub firmware_version: u16,
     pub node_report: String,
+    pub status1: u8,
+    pub status2: u8,
     pub ports: Vec<ProductPortDto>,
     pub online: bool,
     /// When set, send management packets (e.g. ArtIpProg) here instead of `ip_address:6454`.
@@ -265,6 +268,7 @@ fn map_artnet_product_to_dto(p: ArtNetProduct, cutoff: Instant) -> ArtNetProduct
         product_id: artnet_product_id(p.bind_ip, &p.mac_address),
         bind_ip: p.bind_ip.to_string(),
         ip_address: p.ip_address.to_string(),
+        primary_bind_index: p.primary_bind_index,
         mac_address: format!(
             "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             p.mac_address[0],
@@ -280,6 +284,8 @@ fn map_artnet_product_to_dto(p: ArtNetProduct, cutoff: Instant) -> ArtNetProduct
         oem_code: p.oem_code,
         firmware_version: p.firmware_version,
         node_report: p.node_report,
+        status1: p.status1,
+        status2: p.status2,
         ports: p
             .ports
             .into_iter()
@@ -400,6 +406,17 @@ pub struct ArtAddressParams {
     pub set_output_universe: Option<PortUniverseUpdate>,
     /// Optional: program input universe nibble for a port slot (0..3) in this bind page.
     pub set_input_universe: Option<PortUniverseUpdate>,
+    /// Optional LED/front-panel indicator command.
+    pub led_command: Option<LedCommandDto>,
+}
+
+/// Frontend LED intent mapped to ArtAddress command values.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LedCommandDto {
+    Identify,
+    Mute,
+    Normal,
 }
 
 /// Per-port universe update for ArtAddress (slot 0..3; 15-bit port address 0..32767).
@@ -555,6 +572,12 @@ pub async fn send_art_address(
 
     let short_name = sanitize_artnet_text(params.port_name.as_deref(), 17).unwrap_or_default();
     let long_name = sanitize_artnet_text(params.long_name.as_deref(), 63).unwrap_or_default();
+    let led_command = match params.led_command {
+        Some(LedCommandDto::Identify) => ArtAddressCommand::AcLedLocate,
+        Some(LedCommandDto::Mute) => ArtAddressCommand::AcLedMute,
+        Some(LedCommandDto::Normal) => ArtAddressCommand::AcLedNormal,
+        None => ArtAddressCommand::AcNone,
+    };
 
     let mut sw_in = [ART_ADDRESS_NO_CHANGE; 4];
     let mut sw_out = [ART_ADDRESS_NO_CHANGE; 4];
@@ -586,6 +609,7 @@ pub async fn send_art_address(
         && long_name.is_empty()
         && params.set_output_universe.is_none()
         && params.set_input_universe.is_none()
+        && params.led_command.is_none()
     {
         return Err("No ArtAddress update requested".to_string());
     }
@@ -598,7 +622,7 @@ pub async fn send_art_address(
         sw_in,
         sw_out,
         ART_ADDRESS_NO_CHANGE,
-        ArtAddressCommand::AcNone,
+        led_command,
     );
 
     let (tx, rx) = oneshot::channel::<Result<(), String>>();
@@ -1494,6 +1518,7 @@ mod tests {
             bind_ip: Ipv4Addr::new(10, 0, 0, 10),
             ip_address: Ipv4Addr::new(10, 0, 0, 10),
             last_reply_source: None,
+            primary_bind_index: 1,
             mac_address: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55],
             short_name: "Root".to_string(),
             long_name: "Long Node".to_string(),
@@ -1501,6 +1526,8 @@ mod tests {
             oem_code: 0x1234,
             firmware_version: 0x0100,
             node_report: "OK".to_string(),
+            status1: 0b0100_0000,
+            status2: 0x20,
             ports: vec![ProductPort {
                 bind_index: 1,
                 slot: 0,
@@ -1517,6 +1544,9 @@ mod tests {
         assert!(dto.product_id.contains("10.0.0.10"));
         assert!(dto.product_id.contains("001122334455"));
         assert_eq!(dto.transport_addr, None);
+        assert_eq!(dto.primary_bind_index, 1);
+        assert_eq!(dto.status1, 0b0100_0000);
+        assert_eq!(dto.status2, 0x20);
     }
 
     #[test]
@@ -1527,6 +1557,7 @@ mod tests {
             bind_ip: Ipv4Addr::new(10, 0, 0, 10),
             ip_address: Ipv4Addr::new(10, 0, 0, 10),
             last_reply_source: Some(SocketAddr::from(([127, 0, 0, 1], 6457))),
+            primary_bind_index: 1,
             mac_address: [0x00; 6],
             short_name: "N".into(),
             long_name: "L".into(),
@@ -1534,6 +1565,8 @@ mod tests {
             oem_code: 0,
             firmware_version: 0,
             node_report: "".into(),
+            status1: 0,
+            status2: 0,
             ports: vec![],
             last_seen: Instant::now(),
         };
