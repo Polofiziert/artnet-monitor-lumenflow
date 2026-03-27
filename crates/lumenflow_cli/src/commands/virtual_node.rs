@@ -14,7 +14,8 @@ use lumenflow_core::{
     build_art_ip_prog_reply, build_art_tod_data, build_mock_poll_reply,
     build_swisson_bind_poll_reply, parse_art_tod_control, parse_art_tod_request,
     try_build_art_rdm_response_get_supported_parameters, ArtNetPacket, ArtNetParser,
-    MockPollReplyConfig, OpCode, SwissonBindPollReplyParams, TOD_CMD_FULL, TOD_CTRL_FLUSH,
+    ArtAddressCommand, MockPollReplyConfig, OpCode, SwissonBindPollReplyParams, TOD_CMD_FULL,
+    TOD_CTRL_FLUSH,
 };
 
 use lumenflow_core::ArtNetSocket;
@@ -27,9 +28,164 @@ const SWISSON_OEM: u16 = 0x28c1;
 const SWISSON_VERS: u16 = 0x0103;
 const SWISSON_ESTA: u16 = 0x5377;
 const SWISSON_LONG: &str = "SWISSON XND-8";
-const SWISSON_NODE_REPORT: &str = "#0001 [0120] Power on tests successful";
 /// Fixture UID from DMXW_03 **ArtRdm** request (5347:e41bf39f).
 const DEFAULT_RDM_UID: [u8; 6] = [0x53, 0x47, 0xe4, 0x1b, 0xf3, 0x9f];
+
+const RC_POWER_OK: u16 = 0x0001;
+const RC_SH_NAME_OK: u16 = 0x0006;
+const RC_LO_NAME_OK: u16 = 0x0007;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VirtualLedState {
+    Identify,
+    Mute,
+    Normal,
+}
+
+impl VirtualLedState {
+    fn from_art_address_command(cmd: u8) -> Option<Self> {
+        match cmd {
+            x if x == ArtAddressCommand::AcLedLocate as u8 => Some(Self::Identify),
+            x if x == ArtAddressCommand::AcLedMute as u8 => Some(Self::Mute),
+            x if x == ArtAddressCommand::AcLedNormal as u8 => Some(Self::Normal),
+            _ => None,
+        }
+    }
+
+    /// Status1 bits 7-6: 01=Locate, 10=Mute, 11=Normal.
+    fn status1_bits(self) -> u8 {
+        match self {
+            Self::Identify => 0x40,
+            Self::Mute => 0x80,
+            Self::Normal => 0xC0,
+        }
+    }
+
+    fn report_text(self) -> &'static str {
+        match self {
+            Self::Identify => "LED indicators set to locate mode via ArtAddress",
+            Self::Mute => "LED indicators muted via ArtAddress",
+            Self::Normal => "LED indicators restored to normal via ArtAddress",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct VirtualNodeState {
+    long_name: String,
+    bind_short_names: HashMap<u8, String>,
+    led_state: VirtualLedState,
+    address_programmed_via_network: bool,
+    node_report_code: u16,
+    node_report_counter: u16,
+    node_report_text: String,
+}
+
+impl VirtualNodeState {
+    fn swisson_default() -> Self {
+        Self {
+            long_name: SWISSON_LONG.to_string(),
+            bind_short_names: HashMap::new(),
+            led_state: VirtualLedState::Normal,
+            address_programmed_via_network: false,
+            node_report_code: RC_POWER_OK,
+            node_report_counter: 120,
+            node_report_text: "Power on tests successful".to_string(),
+        }
+    }
+
+    fn short_name_for_bind(&self, bind: u8) -> String {
+        self.bind_short_names
+            .get(&bind)
+            .cloned()
+            .unwrap_or_else(|| format!("Port {}", bind))
+    }
+
+    fn status1(&self) -> u8 {
+        let authority_bits = if self.address_programmed_via_network {
+            0x20u8
+        } else {
+            0x00u8
+        };
+        let low_bits = 0x02u8 | authority_bits;
+        self.led_state.status1_bits() | low_bits
+    }
+
+    fn node_report_string(&self) -> String {
+        format!(
+            "#{:04x} [{:04}] {}",
+            self.node_report_code, self.node_report_counter, self.node_report_text
+        )
+    }
+
+    fn set_node_report(&mut self, code: u16, text: impl Into<String>) {
+        self.node_report_code = code;
+        self.node_report_text = text.into();
+    }
+
+    fn report_for_next_poll_reply(&mut self) -> String {
+        let text = self.node_report_string();
+        self.node_report_counter = (self.node_report_counter + 1) % 10_000;
+        if self.node_report_counter == 0 {
+            self.node_report_counter = 1;
+        }
+        text
+    }
+
+    fn apply_address_authority(&mut self, address: &lumenflow_core::ArtAddressPacket) {
+        let net_or_sub_program = address.net_switch != 0x7f || address.sub_switch != 0x7f;
+        let sw_program = address
+            .sw_in
+            .iter()
+            .chain(address.sw_out.iter())
+            .any(|v| *v != 0x7f);
+        if net_or_sub_program || sw_program {
+            self.address_programmed_via_network = true;
+        }
+    }
+
+    fn apply_art_address(&mut self, address: &lumenflow_core::ArtAddressPacket) -> bool {
+        let mut changed = false;
+        let bind = address.bind_index.max(1);
+        self.apply_address_authority(address);
+        let mut name_changed = false;
+
+        let short_name = address.short_name_str().trim();
+        if !short_name.is_empty() {
+            self.bind_short_names.insert(bind, short_name.to_string());
+            self.set_node_report(
+                RC_SH_NAME_OK,
+                format!(
+                    "Port name programmed via ArtAddress (bind {}): {}",
+                    bind, short_name
+                ),
+            );
+            changed = true;
+            name_changed = true;
+        }
+
+        let long_name = address.long_name_str().trim();
+        if !long_name.is_empty() {
+            self.long_name = long_name.to_string();
+            self.set_node_report(
+                RC_LO_NAME_OK,
+                format!("Long name programmed via ArtAddress: {}", long_name),
+            );
+            changed = true;
+            name_changed = true;
+        }
+
+        if let Some(led_state) = VirtualLedState::from_art_address_command(address.command) {
+            self.led_state = led_state;
+            if !name_changed {
+                self.set_node_report(RC_POWER_OK, led_state.report_text());
+            }
+            changed = true;
+        }
+
+        changed
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VirtualNodeProfile {
@@ -57,7 +213,18 @@ fn default_gateway(ip: std::net::Ipv4Addr) -> std::net::Ipv4Addr {
     std::net::Ipv4Addr::new(o[0], o[1], o[2], 1)
 }
 
-/// Runs a virtual Art-Net node: receives ArtDmx and responds to ArtPoll.
+/// Runs a virtual Art-Net node that receives ArtDmx and responds to ArtPoll.
+///
+/// In `swisson-xnd8` profile, this also applies inbound ArtAddress name/LED updates
+/// and reflects them in subsequent ArtPollReply packets.
+///
+/// # Errors
+/// Returns an error when:
+/// - the advertised IP cannot be parsed,
+/// - the optional target host cannot be resolved (periodic mode),
+/// - UDP bind fails,
+/// - packet receive fails,
+/// - packet send fails on operations that are treated as fatal.
 pub async fn run(
     profile: VirtualNodeProfile,
     name: &str,
@@ -94,7 +261,7 @@ pub async fn run(
 
     let mut dmx_recent: HashMap<u16, Instant> = HashMap::new();
     let mut tod_uids: Vec<[u8; 6]> = vec![DEFAULT_RDM_UID];
-    let mut long_overlay: Option<String> = None;
+    let mut virtual_state = VirtualNodeState::swisson_default();
 
     eprintln!(
         "Virtual node profile={:?} '{}' @ {} listening on 0.0.0.0:{}{}",
@@ -145,12 +312,16 @@ pub async fn run(
                     }
                     VirtualNodeProfile::SwissonXnd8 => {
                         for bind in 1u8..=8 {
+                                    let node_report = virtual_state.report_for_next_poll_reply();
                             let pkt = swisson_reply(
                                 ip_addr,
                                 bind,
-                                long_overlay.as_deref(),
+                                        &virtual_state.short_name_for_bind(bind),
+                                        &virtual_state.long_name,
+                                        &node_report,
                                 universe_for_bind(bind),
                                 dmx_recent.contains_key(&universe_for_bind(bind)),
+                                        virtual_state.status1(),
                             );
                             if let Err(e) = socket.send_to(&pkt, ta).await {
                                 eprintln!("[WARN] failed to send periodic ArtPollReply: {e}");
@@ -273,12 +444,16 @@ pub async fn run(
                             VirtualNodeProfile::SwissonXnd8 => {
                                 for bind in 1u8..=8 {
                                     let uni = universe_for_bind(bind);
+                                    let node_report = virtual_state.report_for_next_poll_reply();
                                     let pkt = swisson_reply(
                                         ip_addr,
                                         bind,
-                                        long_overlay.as_deref(),
+                                        &virtual_state.short_name_for_bind(bind),
+                                        &virtual_state.long_name,
+                                        &node_report,
                                         uni,
                                         dmx_recent.contains_key(&uni),
+                                        virtual_state.status1(),
                                     );
                                     if let Err(e) = socket.send_to(&pkt, addr).await {
                                         eprintln!("[WARN] ArtPollReply bind {bind}: {e}");
@@ -305,12 +480,45 @@ pub async fn run(
                     }
                     ArtNetPacket::Address(a) => {
                         if profile == VirtualNodeProfile::SwissonXnd8 {
-                            let ln = a.long_name_str();
-                            if !ln.is_empty() {
-                                long_overlay = Some(ln.to_string());
+                            let bind = a.bind_index.max(1);
+                            let cmd = a.command;
+                            let short = a.short_name_str().to_string();
+                            let long = a.long_name_str().to_string();
+                            let changed = virtual_state.apply_art_address(a);
+                            // Art-Net 4: Node replies to ArtAddress with unicast ArtPollReply.
+                            for bind in 1u8..=8 {
+                                let uni = universe_for_bind(bind);
+                                let node_report = virtual_state.report_for_next_poll_reply();
+                                let pkt = swisson_reply(
+                                    ip_addr,
+                                    bind,
+                                    &virtual_state.short_name_for_bind(bind),
+                                    &virtual_state.long_name,
+                                    &node_report,
+                                    uni,
+                                    dmx_recent.contains_key(&uni),
+                                    virtual_state.status1(),
+                                );
+                                if let Err(e) = socket.send_to(&pkt, addr).await {
+                                    eprintln!("[WARN] ArtAddress->ArtPollReply bind {bind}: {e}");
+                                    break;
+                                }
+                            }
+                            if changed {
+                                eprintln!(
+                                    "[RX ArtAddress] bind {} -> led={:?}, short='{}', long='{}', report='{}'",
+                                    bind,
+                                    virtual_state.led_state,
+                                    virtual_state.short_name_for_bind(bind),
+                                    virtual_state.long_name,
+                                    virtual_state.node_report_string(),
+                                );
                             }
                             if verbose {
-                                eprintln!("[RX ArtAddress] bind {} long='{}'", a.bind_index, ln);
+                                eprintln!(
+                                    "[RX ArtAddress details] cmd=0x{:02x} short='{}' long='{}'",
+                                    cmd, short, long
+                                );
                             }
                         }
                     }
@@ -332,25 +540,128 @@ fn universe_for_bind(bind: u8) -> u16 {
 fn swisson_reply(
     ip: std::net::Ipv4Addr,
     bind: u8,
-    long_override: Option<&str>,
+    short_name: &str,
+    long_name: &str,
+    node_report: &str,
     port_address: u16,
     data_on: bool,
+    status1: u8,
 ) -> [u8; 239] {
-    let long = long_override.unwrap_or(SWISSON_LONG);
-    let short = format!("Port {}", bind);
     let p = SwissonBindPollReplyParams {
         ip,
         mac: SWISSON_MAC,
         bind_index: bind,
-        short_name: short,
-        long_name: long.to_string(),
-        node_report: SWISSON_NODE_REPORT.to_string(),
+        short_name: short_name.to_string(),
+        long_name: long_name.to_string(),
+        node_report: node_report.to_string(),
         port_address,
         oem: SWISSON_OEM,
         vers_info: SWISSON_VERS,
         esta_man: SWISSON_ESTA,
-        status1: 0x02,
+        status1,
         data_on_port: data_on,
     };
     build_swisson_bind_poll_reply(&p)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lumenflow_core::{build_art_address, ArtAddressCommand, ArtNetPacket, ArtNetParser};
+
+    fn parse_address_packet(packet: &[u8; 107]) -> lumenflow_core::ArtAddressPacket {
+        match ArtNetParser::parse(packet) {
+            Ok(ArtNetPacket::Address(address)) => *address,
+            other => panic!("expected ArtAddress packet, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn virtual_state_applies_led_commands_and_status1_bits() {
+        let mut state = VirtualNodeState::swisson_default();
+        assert_eq!(state.status1(), 0xC2);
+
+        let locate = build_art_address(
+            0x7F,
+            1,
+            "",
+            "",
+            [0x7F; 4],
+            [0x7F; 4],
+            0x7F,
+            ArtAddressCommand::AcLedLocate,
+        );
+        let locate_addr = parse_address_packet(&locate);
+        assert!(state.apply_art_address(&locate_addr));
+        assert_eq!(state.led_state, VirtualLedState::Identify);
+        assert_eq!(state.status1(), 0x42);
+
+        let mute = build_art_address(
+            0x7F,
+            1,
+            "",
+            "",
+            [0x7F; 4],
+            [0x7F; 4],
+            0x7F,
+            ArtAddressCommand::AcLedMute,
+        );
+        let mute_addr = parse_address_packet(&mute);
+        assert!(state.apply_art_address(&mute_addr));
+        assert_eq!(state.led_state, VirtualLedState::Mute);
+        assert_eq!(state.status1(), 0x82);
+    }
+
+    #[test]
+    fn node_report_counter_rolls_per_poll_reply() {
+        let mut state = VirtualNodeState::swisson_default();
+        state.node_report_counter = 9999;
+        let r1 = state.report_for_next_poll_reply();
+        let r2 = state.report_for_next_poll_reply();
+        assert!(r1.contains("[9999]"));
+        assert!(r2.contains("[0001]"));
+    }
+
+    #[test]
+    fn virtual_state_applies_port_name_per_bind() {
+        let mut state = VirtualNodeState::swisson_default();
+
+        let address = build_art_address(
+            0x7F,
+            3,
+            "Back Truss",
+            "",
+            [0x7F; 4],
+            [0x7F; 4],
+            0x7F,
+            ArtAddressCommand::AcNone,
+        );
+        let parsed = parse_address_packet(&address);
+        assert!(state.apply_art_address(&parsed));
+
+        assert_eq!(state.short_name_for_bind(1), "Port 1");
+        assert_eq!(state.short_name_for_bind(3), "Back Truss");
+        assert_eq!(state.node_report_code, RC_SH_NAME_OK);
+        assert!(state.node_report_string().contains("Port name programmed"));
+    }
+
+    #[test]
+    fn virtual_state_applies_long_name_overlay() {
+        let mut state = VirtualNodeState::swisson_default();
+        let address = build_art_address(
+            0x7F,
+            1,
+            "",
+            "Node Rack A",
+            [0x7F; 4],
+            [0x7F; 4],
+            0x7F,
+            ArtAddressCommand::AcNone,
+        );
+        let parsed = parse_address_packet(&address);
+        assert!(state.apply_art_address(&parsed));
+        assert_eq!(state.long_name, "Node Rack A");
+        assert_eq!(state.node_report_code, RC_LO_NAME_OK);
+        assert!(state.node_report_string().contains("Long name programmed"));
+    }
 }

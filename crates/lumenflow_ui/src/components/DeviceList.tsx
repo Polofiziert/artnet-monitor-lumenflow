@@ -456,7 +456,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
           sentBundleById,
           startedAtMs: Date.now(),
           warningMessage:
-            "[Warning] Global LED identify not fully confirmed because some devices did not report Status1 indicator changes within 2.6s. Next: verify physical LEDs and retry per device.",
+            "One or more devices did not confirm.",
         });
       }
       return;
@@ -486,7 +486,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       sentBundleById,
       startedAtMs: Date.now(),
       warningMessage:
-        "[Warning] Global LED identify restore not fully confirmed because some devices did not report Status1 indicator changes within 2.6s. Next: verify physical LEDs and retry per device.",
+        "One or more devices did not confirm.",
     });
   };
 
@@ -524,7 +524,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
         sentBundleById,
         startedAtMs: Date.now(),
         warningMessage:
-          "[Warning] Global LED mute not fully confirmed because some devices did not report Status1 indicator changes within 2.6s. Next: verify physical LEDs and retry per device.",
+          "One or more devices did not confirm.",
       });
       return;
     }
@@ -553,7 +553,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       sentBundleById,
       startedAtMs: Date.now(),
       warningMessage:
-        "[Warning] Global LED mute restore not fully confirmed because some devices did not report Status1 indicator changes within 2.6s. Next: verify physical LEDs and retry per device.",
+        "One or more devices did not confirm.",
     });
   };
 
@@ -1394,7 +1394,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
   const ledIndicator = (state: LedUiState) => (
     <span
-      class="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full"
+      class="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
       classList={{
         "bg-teal/25 border border-teal/50 animate-pulse": state === "pending",
         "bg-teal/20 border border-teal text-teal text-[10px]": state === "confirmed",
@@ -1407,6 +1407,17 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       <Show when={state === "confirmed"}>✓</Show>
       <Show when={state === "warning"}>!</Show>
       <Show when={state === "error"}>x</Show>
+    </span>
+  );
+
+  const ledButtonInner = (label: string, state: LedUiState) => (
+    <span class="relative inline-flex h-full w-full items-center justify-center">
+      <Show when={state !== "neutral"}>
+        <span class="absolute inset-0 flex items-center justify-center">
+          {ledIndicator(state)}
+        </span>
+      </Show>
+      <span classList={{ invisible: state !== "neutral" }}>{label}</span>
     </span>
   );
 
@@ -1506,7 +1517,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         type="button"
                         onClick={() => void toggleGlobalIdentify()}
                         data-testid="led-global-identify"
-                        class="inline-flex min-w-[7.25rem] items-center justify-center gap-1 rounded border px-2 py-1 text-[10px] transition-colors"
+                        class="inline-flex h-6 w-[5.25rem] items-center justify-center rounded border px-1.5 text-[10px] transition-colors"
                         classList={{
                           "border-teal/40 bg-teal/10 text-teal":
                             globalIdentifyActive(),
@@ -1514,15 +1525,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                             !globalIdentifyActive(),
                         }}
                       >
-                        <Show when={status.state !== "neutral"}>
-                          {ledIndicator(status.state)}
-                        </Show>
-                        <Show
-                          when={status.state === "neutral"}
-                          fallback={<span class="invisible">Identify</span>}
-                        >
-                          <span>Identify</span>
-                        </Show>
+                        {ledButtonInner("Identify", status.state)}
                       </button>
                     );
                   })()}
@@ -1534,22 +1537,14 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         type="button"
                         onClick={() => void toggleGlobalMute()}
                         data-testid="led-global-mute"
-                        class="inline-flex min-w-[7.25rem] items-center justify-center gap-1 rounded border px-2 py-1 text-[10px] transition-colors"
+                        class="inline-flex h-6 w-[5.25rem] items-center justify-center rounded border px-1.5 text-[10px] transition-colors"
                         classList={{
                           "border-teal/40 bg-teal/10 text-teal": globalMuteActive(),
                           "border-edge bg-surface text-secondary hover:text-primary":
                             !globalMuteActive(),
                         }}
                       >
-                        <Show when={status.state !== "neutral"}>
-                          {ledIndicator(status.state)}
-                        </Show>
-                        <Show
-                          when={status.state === "neutral"}
-                          fallback={<span class="invisible">Mute LED</span>}
-                        >
-                          <span>Mute LED</span>
-                        </Show>
+                        {ledButtonInner("Mute LED", status.state)}
                       </button>
                     );
                   })()}
@@ -1618,7 +1613,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                               type="button"
                               onClick={() => void sendPerDeviceIdentifyToggle(device)}
                               data-testid={`led-device-identify-${device.product_id}`}
-                              class="inline-flex min-w-[6.6rem] items-center justify-center gap-1 rounded border px-2 py-1 text-[10px] transition-colors"
+                              class="inline-flex h-6 w-[4.75rem] items-center justify-center rounded border px-1.5 text-[10px] transition-colors"
                               classList={{
                                 "border-teal/40 bg-teal/10 text-teal":
                                   deviceLedMode(device) === "identify",
@@ -1626,15 +1621,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                   deviceLedMode(device) !== "identify",
                               }}
                             >
-                              <Show when={status.state !== "neutral"}>
-                                {ledIndicator(status.state)}
-                              </Show>
-                              <Show
-                                when={status.state === "neutral"}
-                                fallback={<span class="invisible">Identify</span>}
-                              >
-                                <span>Identify</span>
-                              </Show>
+                              {ledButtonInner("Identify", status.state)}
                             </button>
                           );
                         })()}
@@ -1650,7 +1637,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                               type="button"
                               onClick={() => void sendPerDeviceMuteToggle(device)}
                               data-testid={`led-device-mute-${device.product_id}`}
-                              class="inline-flex min-w-[6.6rem] items-center justify-center gap-1 rounded border px-2 py-1 text-[10px] transition-colors"
+                              class="inline-flex h-6 w-[4.75rem] items-center justify-center rounded border px-1.5 text-[10px] transition-colors"
                               classList={{
                                 "border-teal/40 bg-teal/10 text-teal":
                                   deviceLedMode(device) === "mute",
@@ -1658,15 +1645,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                   deviceLedMode(device) !== "mute",
                               }}
                             >
-                              <Show when={status.state !== "neutral"}>
-                                {ledIndicator(status.state)}
-                              </Show>
-                              <Show
-                                when={status.state === "neutral"}
-                                fallback={<span class="invisible">Mute LED</span>}
-                              >
-                                <span>Mute LED</span>
-                              </Show>
+                              {ledButtonInner("Mute LED", status.state)}
                             </button>
                           );
                         })()}

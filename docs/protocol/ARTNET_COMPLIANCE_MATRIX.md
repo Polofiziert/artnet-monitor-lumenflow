@@ -22,7 +22,7 @@ Provide an auditable view of protocol support and testing evidence to prevent am
 | ArtPoll / ArtPollReply discovery | implemented | Core discovery behavior and product identity are active | `docs/IPC_API_CONTRACT.md`, `docs/development/TESTING.md` |
 | ArtDmx ingest (512 handling) | implemented | Hot path + viewport emission architecture in place | `docs/architecture/ARCHITECTURE.md`, `docs/IPC_API_CONTRACT.md` |
 | ArtSync handling | partial | Supported in contract/events; verify source matching behavior per policy | `docs/IPC_API_CONTRACT.md`, `docs/development/ARTNET_PROTOCOL_PATTERNS_DMXW_COMPLIANCE.md` |
-| ArtAddress config + verify-after-write | partial | Command path present; verification semantics must stay strict | `docs/IPC_API_CONTRACT.md`, `docs/diagnostics/DIAGNOSTIC_EVENT_CATALOG.md` |
+| ArtAddress config + verify-after-write | partial | Command path present; verification semantics must stay strict. Virtual-network `swisson-xnd8` simulation now applies Port Name / Long Name / LED commands and emits follow-up PollReply state (`Status1`, `NodeReport`) for lab validation. | `docs/IPC_API_CONTRACT.md`, `docs/development/TESTING.md`, `docs/diagnostics/DIAGNOSTIC_EVENT_CATALOG.md` |
 | ArtIpProg command/reply | implemented | Command + DTO path documented | `docs/IPC_API_CONTRACT.md` |
 | ArtDiagData ingestion | implemented | Snapshot + event flow documented | `docs/IPC_API_CONTRACT.md` |
 | ArtCommand / ArtTrigger wire correctness | partial | Historical malformed layout issue reviewed; enforce spec checks | `docs/development/WIRESHARK_MALFORMED_REVIEW.md` |
