@@ -2,9 +2,9 @@ name: CI - PR Checks (Light)
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, development/release-*]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, development/release-*]
 
 permissions:
   contents: read
