@@ -82,6 +82,32 @@ describe("DeviceList LED controls", () => {
     render(() => <DeviceList products={products} pollReplyActivity={activity} />);
 
     const identifyButton = await screen.findByTestId("led-device-identify-a");
+    const muteButton = await screen.findByTestId("led-device-mute-a");
+    const globalIdentify = await screen.findByTestId("led-global-identify");
+    const globalMute = await screen.findByTestId("led-global-mute");
+
+    expect(identifyButton.getAttribute("title")).toBe(
+      "Identify device LEDs for Node a [1]"
+    );
+    expect(identifyButton.getAttribute("aria-label")).toBe(
+      "Identify device LEDs for Node a [1]"
+    );
+    expect(muteButton.getAttribute("title")).toBe(
+      "Mute device LEDs for Node a [1]"
+    );
+    expect(globalIdentify.getAttribute("title")).toBe("Identify device LEDs");
+    expect(globalMute.getAttribute("title")).toBe("Mute device LEDs");
+    expect(identifyButton.getAttribute("aria-pressed")).toBe("false");
+    expect(muteButton.getAttribute("aria-pressed")).toBe("false");
+    expect(globalIdentify.getAttribute("aria-pressed")).toBe("false");
+    expect(globalMute.getAttribute("aria-pressed")).toBe("false");
+
+    expect(identifyButton.querySelector("svg")).toBeTruthy();
+    expect(muteButton.querySelector("svg")).toBeTruthy();
+    expect(identifyButton.querySelector("svg")?.getAttribute("aria-hidden")).toBe(
+      "true"
+    );
+
     await fireEvent.click(identifyButton);
 
     expect(invokeMock).toHaveBeenCalledWith(
@@ -115,6 +141,11 @@ describe("DeviceList LED controls", () => {
         (screen.getByTestId("led-device-identify-a") as HTMLButtonElement).className
       ).toContain("border-teal/40")
     );
+    expect(
+      (screen.getByTestId("led-device-identify-a") as HTMLButtonElement).getAttribute(
+        "aria-pressed"
+      )
+    ).toBe("true");
   });
 
   it("shows warning when no confirmation arrives before timeout", async () => {
