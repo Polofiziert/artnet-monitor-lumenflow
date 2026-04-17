@@ -270,9 +270,36 @@ describe("DeviceList LED controls", () => {
       product("c", "10.0.0.12", 0b0100_0000),
     ]);
     setActivity({
-      a: { ...activity().a, pulseNonce: 2, bundleCount: 2 },
-      b: { ...activity().b, pulseNonce: 2, bundleCount: 2 },
-      c: { ...activity().c, pulseNonce: 2, bundleCount: 2 },
+      a: {
+        pulseNonce: 2,
+        lastReceivedAtMs: Date.now(),
+        lastBindIndex: 1,
+        ipAddress: "10.0.0.10",
+        bindIp: "10.0.0.10",
+        shortName: "Node a",
+        bundleWindowMs: 180,
+        bundleCount: 2,
+      },
+      b: {
+        pulseNonce: 2,
+        lastReceivedAtMs: Date.now(),
+        lastBindIndex: 1,
+        ipAddress: "10.0.0.11",
+        bindIp: "10.0.0.11",
+        shortName: "Node b",
+        bundleWindowMs: 180,
+        bundleCount: 2,
+      },
+      c: {
+        pulseNonce: 2,
+        lastReceivedAtMs: Date.now(),
+        lastBindIndex: 1,
+        ipAddress: "10.0.0.12",
+        bindIp: "10.0.0.12",
+        shortName: "Node c",
+        bundleWindowMs: 180,
+        bundleCount: 2,
+      },
     });
     await waitFor(() =>
       expect(
@@ -285,7 +312,7 @@ describe("DeviceList LED controls", () => {
     await fireEvent.click(screen.getByTestId("led-global-identify"));
     await waitFor(() => {
       const restoreCalls = invokeMock.mock.calls
-        .filter(([cmd, args]) => cmd === "send_art_address")
+        .filter(([cmd]) => cmd === "send_art_address")
         .map(([, args]) => [
           args?.params?.target_ip,
           args?.params?.led_command,

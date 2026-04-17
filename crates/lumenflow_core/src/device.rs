@@ -274,7 +274,7 @@ impl DeviceRegistry {
             })
             .collect();
 
-        products.sort_by(|a, b| a.bind_ip.cmp(&b.bind_ip));
+        products.sort_by_key(|a| a.bind_ip);
         products
     }
 

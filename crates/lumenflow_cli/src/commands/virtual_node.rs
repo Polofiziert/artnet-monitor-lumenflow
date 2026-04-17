@@ -313,16 +313,16 @@ pub async fn run(
                     VirtualNodeProfile::SwissonXnd8 => {
                         for bind in 1u8..=8 {
                                     let node_report = virtual_state.report_for_next_poll_reply();
-                            let pkt = swisson_reply(
-                                ip_addr,
+                            let pkt = swisson_reply(SwissonReplyInput {
+                                ip: ip_addr,
                                 bind,
-                                        &virtual_state.short_name_for_bind(bind),
-                                        &virtual_state.long_name,
-                                        &node_report,
-                                universe_for_bind(bind),
-                                dmx_recent.contains_key(&universe_for_bind(bind)),
-                                        virtual_state.status1(),
-                            );
+                                short_name: &virtual_state.short_name_for_bind(bind),
+                                long_name: &virtual_state.long_name,
+                                node_report: &node_report,
+                                port_address: universe_for_bind(bind),
+                                data_on: dmx_recent.contains_key(&universe_for_bind(bind)),
+                                status1: virtual_state.status1(),
+                            });
                             if let Err(e) = socket.send_to(&pkt, ta).await {
                                 eprintln!("[WARN] failed to send periodic ArtPollReply: {e}");
                                 break;
@@ -445,16 +445,16 @@ pub async fn run(
                                 for bind in 1u8..=8 {
                                     let uni = universe_for_bind(bind);
                                     let node_report = virtual_state.report_for_next_poll_reply();
-                                    let pkt = swisson_reply(
-                                        ip_addr,
+                                    let pkt = swisson_reply(SwissonReplyInput {
+                                        ip: ip_addr,
                                         bind,
-                                        &virtual_state.short_name_for_bind(bind),
-                                        &virtual_state.long_name,
-                                        &node_report,
-                                        uni,
-                                        dmx_recent.contains_key(&uni),
-                                        virtual_state.status1(),
-                                    );
+                                        short_name: &virtual_state.short_name_for_bind(bind),
+                                        long_name: &virtual_state.long_name,
+                                        node_report: &node_report,
+                                        port_address: uni,
+                                        data_on: dmx_recent.contains_key(&uni),
+                                        status1: virtual_state.status1(),
+                                    });
                                     if let Err(e) = socket.send_to(&pkt, addr).await {
                                         eprintln!("[WARN] ArtPollReply bind {bind}: {e}");
                                         break;
@@ -489,16 +489,16 @@ pub async fn run(
                             for bind in 1u8..=8 {
                                 let uni = universe_for_bind(bind);
                                 let node_report = virtual_state.report_for_next_poll_reply();
-                                let pkt = swisson_reply(
-                                    ip_addr,
+                                let pkt = swisson_reply(SwissonReplyInput {
+                                    ip: ip_addr,
                                     bind,
-                                    &virtual_state.short_name_for_bind(bind),
-                                    &virtual_state.long_name,
-                                    &node_report,
-                                    uni,
-                                    dmx_recent.contains_key(&uni),
-                                    virtual_state.status1(),
-                                );
+                                    short_name: &virtual_state.short_name_for_bind(bind),
+                                    long_name: &virtual_state.long_name,
+                                    node_report: &node_report,
+                                    port_address: uni,
+                                    data_on: dmx_recent.contains_key(&uni),
+                                    status1: virtual_state.status1(),
+                                });
                                 if let Err(e) = socket.send_to(&pkt, addr).await {
                                     eprintln!("[WARN] ArtAddress->ArtPollReply bind {bind}: {e}");
                                     break;
@@ -537,29 +537,31 @@ fn universe_for_bind(bind: u8) -> u16 {
     (bind as u16).saturating_sub(1).min(0x7FFF)
 }
 
-fn swisson_reply(
+struct SwissonReplyInput<'a> {
     ip: std::net::Ipv4Addr,
     bind: u8,
-    short_name: &str,
-    long_name: &str,
-    node_report: &str,
+    short_name: &'a str,
+    long_name: &'a str,
+    node_report: &'a str,
     port_address: u16,
     data_on: bool,
     status1: u8,
-) -> [u8; 239] {
+}
+
+fn swisson_reply(input: SwissonReplyInput<'_>) -> [u8; 239] {
     let p = SwissonBindPollReplyParams {
-        ip,
+        ip: input.ip,
         mac: SWISSON_MAC,
-        bind_index: bind,
-        short_name: short_name.to_string(),
-        long_name: long_name.to_string(),
-        node_report: node_report.to_string(),
-        port_address,
+        bind_index: input.bind,
+        short_name: input.short_name.to_string(),
+        long_name: input.long_name.to_string(),
+        node_report: input.node_report.to_string(),
+        port_address: input.port_address,
         oem: SWISSON_OEM,
         vers_info: SWISSON_VERS,
         esta_man: SWISSON_ESTA,
-        status1,
-        data_on_port: data_on,
+        status1: input.status1,
+        data_on_port: input.data_on,
     };
     build_swisson_bind_poll_reply(&p)
 }
