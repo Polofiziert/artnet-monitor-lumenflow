@@ -36,6 +36,7 @@ export interface ArtNetProductDto {
   product_id: string;
   bind_ip: string;
   ip_address: string;
+  primary_bind_index?: number;
   /** When set (e.g. 127.0.0.1:6457), management packets use this instead of ip_address:6454 (Docker NAT). */
   transport_addr?: string | null;
   mac_address: string;
@@ -45,6 +46,10 @@ export interface ArtNetProductDto {
   oem_code: number;
   firmware_version: number;
   node_report: string;
+  /** ArtPollReply Status1 (bits 7..6 = indicator mode). */
+  status1?: number;
+  /** ArtPollReply Status2 (bit 5 = squawking). */
+  status2?: number;
   ports: ProductPortDto[];
   online?: boolean;
 }
@@ -95,6 +100,32 @@ interface PollReplyPulseDotProps {
 }
 
 type EditableField = "ip" | "long_name" | "port_name" | "port_out" | "port_in";
+type LedMode = "unknown" | "identify" | "mute" | "normal";
+type LedCommand = "identify" | "mute" | "normal";
+type LedUiState = "neutral" | "pending" | "confirmed" | "warning" | "error";
+type LedAction = "identify" | "mute";
+
+interface LedPendingIntent {
+  productId: string;
+  sentBundleCount: number;
+  expected: LedMode;
+  startedAtMs: number;
+  timeoutMs: number;
+  warningMessage: string;
+}
+
+interface LedButtonStatus {
+  state: LedUiState;
+  message?: string;
+  expiresAtMs?: number;
+}
+
+interface GlobalLedPending {
+  expectedById: Record<string, LedMode>;
+  sentBundleById: Record<string, number>;
+  startedAtMs: number;
+  warningMessage: string;
+}
 
 const PollReplyPulseDot: Component<PollReplyPulseDotProps> = (props) => {
   const [burst, setBurst] = createSignal(false);
@@ -125,6 +156,41 @@ const PollReplyPulseDot: Component<PollReplyPulseDotProps> = (props) => {
   );
 };
 
+const CircleDotDashedIcon: Component<{ class?: string }> = (props) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    class={props.class}
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="1" />
+    <path d="M22 12a10 10 0 0 0-10-10" />
+    <path d="M12 2a10 10 0 0 0-10 10" />
+    <path d="M2 12a10 10 0 0 0 10 10" />
+    <path d="M12 22a10 10 0 0 0 10-10" />
+  </svg>
+);
+
+const CircleSlash2Icon: Component<{ class?: string }> = (props) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    class={props.class}
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <path d="M4.9 4.9 19.1 19.1" />
+  </svg>
+);
+
 /** Manual-only row (no ArtPollReply yet). */
 function syntheticProduct(entry: ManualDeviceEntry): ArtNetProductDto {
   const ip = entry.ip.trim();
@@ -133,6 +199,7 @@ function syntheticProduct(entry: ManualDeviceEntry): ArtNetProductDto {
     product_id: id,
     bind_ip: ip,
     ip_address: ip,
+    primary_bind_index: 1,
     mac_address: "",
     short_name: entry.name ?? ip,
     long_name: "Manual entry",
@@ -140,6 +207,8 @@ function syntheticProduct(entry: ManualDeviceEntry): ArtNetProductDto {
     oem_code: 0,
     firmware_version: 0,
     node_report: "",
+    status1: 0,
+    status2: 0,
     ports: [],
     online: false,
   };
@@ -182,6 +251,21 @@ function hex(value: number, width = 2): string {
   return `0x${value.toString(16).toUpperCase().padStart(width, "0")}`;
 }
 
+function decodeLedModeFromStatus1(status1?: number): LedMode {
+  if (typeof status1 !== "number") return "unknown";
+  const bits = (status1 >> 6) & 0x03;
+  if (bits === 0x01) return "identify";
+  if (bits === 0x02) return "mute";
+  if (bits === 0x03) return "normal";
+  return "unknown";
+}
+
+function ledModeToCommand(mode: LedMode): LedCommand {
+  if (mode === "identify") return "identify";
+  if (mode === "mute") return "mute";
+  return "normal";
+}
+
 const DeviceList: Component<DeviceListProps> = (props) => {
   const [selectedProductId, setSelectedProductId] = createSignal<string | null>(
     null
@@ -218,10 +302,39 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   const [ipProgByProductId, setIpProgByProductId] = createSignal<
     Record<string, { reply: IpProgReplyDto; receivedAtMs: number }>
   >({});
+  const [ledPendingByButton, setLedPendingByButton] = createSignal<
+    Record<string, LedPendingIntent>
+  >({});
+  const [ledButtonStatusByKey, setLedButtonStatusByKey] = createSignal<
+    Record<string, LedButtonStatus>
+  >({});
+  const [ledRestoreByDevice, setLedRestoreByDevice] = createSignal<
+    Record<string, { identify?: LedMode; mute?: LedMode }>
+  >({});
+  const [globalIdentifySnapshot, setGlobalIdentifySnapshot] =
+    createSignal<Record<string, LedMode> | null>(null);
+  const [globalMuteSnapshot, setGlobalMuteSnapshot] = createSignal<Record<
+    string,
+    LedMode
+  > | null>(null);
+  const [globalIdentifyPending, setGlobalIdentifyPending] =
+    createSignal<GlobalLedPending | null>(null);
+  const [globalMutePending, setGlobalMutePending] =
+    createSignal<GlobalLedPending | null>(null);
   const [controllersSeen, setControllersSeen] = createSignal<
     ControllerSeenDto[]
   >([]);
+  const [nowTickMs, setNowTickMs] = createSignal(Date.now());
   const log = useDiagLog();
+  const LED_CONFIRM_TIMEOUT_MS = 2600;
+  const LED_STATUS_CONFIRM_MS = 900;
+  const LED_STATUS_WARN_MS = 6500;
+  const LED_STATUS_ERR_MS = 6500;
+
+  createEffect(() => {
+    const t = setInterval(() => setNowTickMs(Date.now()), 250);
+    onCleanup(() => clearInterval(t));
+  });
 
   createEffect(() => {
     let cancelled = false;
@@ -297,15 +410,324 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   const connectedDevices = createMemo(() =>
     filteredDevices().filter((d) => d.online !== false)
   );
+  const ledEligibleConnectedDevices = createMemo(() =>
+    connectedDevices().filter((d) => d.long_name !== "Manual entry")
+  );
   const previouslySeenDevices = createMemo(() =>
     filteredDevices().filter((d) => d.online === false)
   );
+
+  const globalIdentifyActive = () => {
+    const snapshot = globalIdentifySnapshot();
+    if (!snapshot) return false;
+    const ids = Object.keys(snapshot);
+    if (ids.length === 0) return false;
+    const byId = new Map(mergedProducts().map((d) => [d.product_id, d]));
+    return ids.every((id) => {
+      const d = byId.get(id);
+      return d != null && deviceLedMode(d) === "identify";
+    });
+  };
+
+  const globalMuteActive = () => {
+    const snapshot = globalMuteSnapshot();
+    if (!snapshot) return false;
+    const ids = Object.keys(snapshot);
+    if (ids.length === 0) return false;
+    const byId = new Map(mergedProducts().map((d) => [d.product_id, d]));
+    return ids.every((id) => {
+      const d = byId.get(id);
+      return d != null && deviceLedMode(d) === "mute";
+    });
+  };
+
+  const toggleGlobalIdentify = async () => {
+    const key = ledButtonKey("global", "connected", "identify");
+    const targets = ledEligibleConnectedDevices();
+    if (targets.length === 0) return;
+    if (!globalIdentifySnapshot()) {
+      const snapshot: Record<string, LedMode> = {};
+      for (const d of targets) {
+        const restore = deviceLedMode(d);
+        snapshot[d.product_id] = restore === "unknown" ? "normal" : restore;
+      }
+      setGlobalIdentifySnapshot(snapshot);
+      const expected: Record<string, LedMode> = {};
+      for (const d of targets) {
+        expected[d.product_id] = "identify";
+      }
+      let sendFailures = 0;
+      for (const d of targets) {
+        const perDeviceKey = ledButtonKey("device", d.product_id, "identify");
+        try {
+          await triggerLedCommand(
+            d,
+            "identify",
+            perDeviceKey,
+            "identify",
+            "[Warning] LED identify not confirmed because Status1 indicator bits did not change within 2.6s. Next: verify panel LEDs physically and retry."
+          );
+        } catch {
+          sendFailures += 1;
+        }
+      }
+      if (sendFailures > 0) {
+        setLedButtonStatus(
+          key,
+          "error",
+          `Command failed for ${sendFailures} device(s).`,
+          LED_STATUS_ERR_MS
+        );
+      } else {
+        setLedButtonStatus(key, "pending");
+        const expectedById: Record<string, LedMode> = {};
+        const sentBundleById: Record<string, number> = {};
+        for (const d of targets) expectedById[d.product_id] = "identify";
+        for (const d of targets) {
+          sentBundleById[d.product_id] =
+            pollActivityFor(d.product_id)?.bundleCount ?? 0;
+        }
+        setGlobalIdentifyPending({
+          expectedById,
+          sentBundleById,
+          startedAtMs: Date.now(),
+          warningMessage: "One or more devices did not confirm.",
+        });
+      }
+      return;
+    }
+    const snapshot = globalIdentifySnapshot() ?? {};
+    setGlobalIdentifySnapshot(null);
+    for (const d of targets) {
+      const restore = snapshot[d.product_id] ?? "normal";
+      const perDeviceKey = ledButtonKey("device", d.product_id, "identify");
+      await triggerLedCommand(
+        d,
+        ledModeToCommand(restore),
+        perDeviceKey,
+        restore,
+        "[Warning] LED restore after identify was not confirmed because Status1 indicator bits did not change within 2.6s. Next: verify panel LEDs physically and retry."
+      );
+    }
+    setLedButtonStatus(key, "pending");
+    const expectedById: Record<string, LedMode> = {};
+    const sentBundleById: Record<string, number> = {};
+    for (const d of targets) {
+      expectedById[d.product_id] = snapshot[d.product_id] ?? "normal";
+      sentBundleById[d.product_id] =
+        pollActivityFor(d.product_id)?.bundleCount ?? 0;
+    }
+    setGlobalIdentifyPending({
+      expectedById,
+      sentBundleById,
+      startedAtMs: Date.now(),
+      warningMessage: "One or more devices did not confirm.",
+    });
+  };
+
+  const toggleGlobalMute = async () => {
+    const key = ledButtonKey("global", "connected", "mute");
+    const targets = ledEligibleConnectedDevices();
+    if (targets.length === 0) return;
+    if (!globalMuteSnapshot()) {
+      const snapshot: Record<string, LedMode> = {};
+      for (const d of targets) {
+        const restore = deviceLedMode(d);
+        snapshot[d.product_id] = restore === "unknown" ? "normal" : restore;
+      }
+      setGlobalMuteSnapshot(snapshot);
+      for (const d of targets) {
+        const perDeviceKey = ledButtonKey("device", d.product_id, "mute");
+        await triggerLedCommand(
+          d,
+          "mute",
+          perDeviceKey,
+          "mute",
+          "[Warning] LED mute not confirmed because Status1 indicator bits did not change within 2.6s. Next: verify panel LEDs physically and retry."
+        );
+      }
+      setLedButtonStatus(key, "pending");
+      const expectedById: Record<string, LedMode> = {};
+      const sentBundleById: Record<string, number> = {};
+      for (const d of targets) expectedById[d.product_id] = "mute";
+      for (const d of targets) {
+        sentBundleById[d.product_id] =
+          pollActivityFor(d.product_id)?.bundleCount ?? 0;
+      }
+      setGlobalMutePending({
+        expectedById,
+        sentBundleById,
+        startedAtMs: Date.now(),
+        warningMessage: "One or more devices did not confirm.",
+      });
+      return;
+    }
+    const snapshot = globalMuteSnapshot() ?? {};
+    setGlobalMuteSnapshot(null);
+    for (const d of targets) {
+      const restore = snapshot[d.product_id] ?? "normal";
+      const perDeviceKey = ledButtonKey("device", d.product_id, "mute");
+      await triggerLedCommand(
+        d,
+        ledModeToCommand(restore),
+        perDeviceKey,
+        restore,
+        "[Warning] LED restore after mute was not confirmed because Status1 indicator bits did not change within 2.6s. Next: verify panel LEDs physically and retry."
+      );
+    }
+    setLedButtonStatus(key, "pending");
+    const expectedById: Record<string, LedMode> = {};
+    const sentBundleById: Record<string, number> = {};
+    for (const d of targets) {
+      expectedById[d.product_id] = snapshot[d.product_id] ?? "normal";
+      sentBundleById[d.product_id] =
+        pollActivityFor(d.product_id)?.bundleCount ?? 0;
+    }
+    setGlobalMutePending({
+      expectedById,
+      sentBundleById,
+      startedAtMs: Date.now(),
+      warningMessage: "One or more devices did not confirm.",
+    });
+  };
 
   const selectedDevice = createMemo(() => {
     const id = selectedProductId();
     if (!id) return undefined;
     return mergedProducts().find((d) => d.product_id === id);
   });
+
+  const deviceLedMode = (device: ArtNetProductDto): LedMode =>
+    decodeLedModeFromStatus1(device.status1);
+
+  const ledButtonKey = (
+    scope: "device" | "global",
+    id: string,
+    action: "identify" | "mute"
+  ) => `${scope}:${id}:${action}`;
+
+  const setLedButtonStatus = (
+    key: string,
+    state: LedUiState,
+    message?: string,
+    ttlMs?: number
+  ) => {
+    const expiresAtMs = ttlMs ? Date.now() + ttlMs : undefined;
+    const nextStatus: LedButtonStatus = { state };
+    if (message !== undefined) nextStatus.message = message;
+    if (expiresAtMs !== undefined) nextStatus.expiresAtMs = expiresAtMs;
+    setLedButtonStatusByKey((prev) => ({
+      ...prev,
+      [key]: nextStatus,
+    }));
+  };
+
+  const triggerLedCommand = async (
+    device: ArtNetProductDto,
+    command: LedCommand,
+    buttonKey: string,
+    expectedMode: LedMode,
+    warningMessage: string
+  ) => {
+    setLedButtonStatus(buttonKey, "pending");
+    const sentBundleCount =
+      pollActivityFor(device.product_id)?.bundleCount ?? 0;
+    setLedPendingByButton((prev) => ({
+      ...prev,
+      [buttonKey]: {
+        productId: device.product_id,
+        sentBundleCount,
+        expected: expectedMode,
+        startedAtMs: Date.now(),
+        timeoutMs: LED_CONFIRM_TIMEOUT_MS,
+        warningMessage,
+      },
+    }));
+    try {
+      const bindIndex = device.primary_bind_index ?? 1;
+      await invoke("send_art_address", {
+        params: {
+          target_ip: device.ip_address,
+          transport: device.transport_addr ?? null,
+          bind_index: bindIndex,
+          long_name: null,
+          port_name: null,
+          led_command: command,
+        },
+      });
+      props.onReadCurrent?.();
+    } catch (e) {
+      setLedPendingByButton((prev) => {
+        const next = { ...prev };
+        delete next[buttonKey];
+        return next;
+      });
+      setLedButtonStatus(
+        buttonKey,
+        "error",
+        `Command failed: ${e instanceof Error ? e.message : String(e)}`,
+        LED_STATUS_ERR_MS
+      );
+    }
+  };
+
+  const sendPerDeviceIdentifyToggle = async (device: ArtNetProductDto) => {
+    const mode = deviceLedMode(device);
+    const restoreState = ledRestoreByDevice()[device.product_id]?.identify;
+    const key = ledButtonKey("device", device.product_id, "identify");
+    if (mode === "identify") {
+      const restore = restoreState ?? "normal";
+      await triggerLedCommand(
+        device,
+        ledModeToCommand(restore),
+        key,
+        restore,
+        "[Warning] LED identify not confirmed because Status1 indicator bits did not change within 2.6s. Next: verify panel LEDs physically and retry."
+      );
+      return;
+    }
+    const restore = mode === "unknown" ? "normal" : mode;
+    setLedRestoreByDevice((prev) => ({
+      ...prev,
+      [device.product_id]: { ...prev[device.product_id], identify: restore },
+    }));
+    await triggerLedCommand(
+      device,
+      "identify",
+      key,
+      "identify",
+      "[Warning] LED identify not confirmed because Status1 indicator bits did not change within 2.6s. Next: verify panel LEDs physically and retry."
+    );
+  };
+
+  const sendPerDeviceMuteToggle = async (device: ArtNetProductDto) => {
+    const mode = deviceLedMode(device);
+    const restoreState = ledRestoreByDevice()[device.product_id]?.mute;
+    const key = ledButtonKey("device", device.product_id, "mute");
+    if (mode === "mute") {
+      const restore = restoreState ?? "normal";
+      await triggerLedCommand(
+        device,
+        ledModeToCommand(restore),
+        key,
+        restore,
+        "[Warning] LED mute/normal transition not confirmed because Status1 indicator bits did not change within 2.6s. Next: verify panel LEDs physically and retry."
+      );
+      return;
+    }
+    const restore = mode === "unknown" ? "normal" : mode;
+    setLedRestoreByDevice((prev) => ({
+      ...prev,
+      [device.product_id]: { ...prev[device.product_id], mute: restore },
+    }));
+    await triggerLedCommand(
+      device,
+      "mute",
+      key,
+      "mute",
+      "[Warning] LED mute not confirmed because Status1 indicator bits did not change within 2.6s. Next: verify panel LEDs physically and retry."
+    );
+  };
 
   const selectedPollBundleCount = () =>
     selectedDevice()
@@ -613,7 +1035,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     const productId = device.product_id;
     const targetIp = device.ip_address;
     const transportAddr = device.transport_addr ?? null;
-    const bindIndex = device.ports[0]?.bind_index ?? 1;
+    const bindIndex = device.primary_bind_index ?? 1;
     void invoke("send_art_address", {
       params: {
         target_ip: targetIp,
@@ -881,6 +1303,176 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     if (changed) setPendingEdits(next);
   });
 
+  createEffect(() => {
+    const products = mergedProducts();
+    const pending = ledPendingByButton();
+    const now = nowTickMs();
+    if (Object.keys(pending).length === 0) return;
+    const byId = new Map(products.map((d) => [d.product_id, d]));
+    let pendingChanged = false;
+    const nextPending = { ...pending };
+    for (const [buttonKey, wait] of Object.entries(pending)) {
+      const parts = buttonKey.split(":");
+      const scope = parts[0];
+      const productId = parts[1];
+      if (scope !== "device") continue;
+      if (!productId) continue;
+      const d = byId.get(productId);
+      if (!d) continue;
+      const mode = deviceLedMode(d);
+      const bundleCount =
+        pollActivityFor(wait.productId)?.bundleCount ?? wait.sentBundleCount;
+      const hasFreshPollReply = bundleCount > wait.sentBundleCount;
+      if (hasFreshPollReply && mode === wait.expected) {
+        delete nextPending[buttonKey];
+        setLedButtonStatus(
+          buttonKey,
+          "confirmed",
+          undefined,
+          LED_STATUS_CONFIRM_MS
+        );
+        pendingChanged = true;
+        continue;
+      }
+      if (now - wait.startedAtMs >= wait.timeoutMs) {
+        delete nextPending[buttonKey];
+        setLedButtonStatus(
+          buttonKey,
+          "warning",
+          wait.warningMessage,
+          LED_STATUS_WARN_MS
+        );
+        pendingChanged = true;
+      }
+    }
+    if (pendingChanged) setLedPendingByButton(nextPending);
+  });
+
+  createEffect(() => {
+    const statuses = ledButtonStatusByKey();
+    const now = nowTickMs();
+    const next = { ...statuses };
+    let changed = false;
+    for (const [key, status] of Object.entries(statuses)) {
+      if (!status.expiresAtMs) continue;
+      if (status.expiresAtMs <= now) {
+        next[key] = { state: "neutral" };
+        changed = true;
+      }
+    }
+    if (changed) setLedButtonStatusByKey(next);
+  });
+
+  createEffect(() => {
+    const now = nowTickMs();
+    const products = mergedProducts();
+    const byId = new Map(products.map((d) => [d.product_id, d]));
+
+    const identifyPending = globalIdentifyPending();
+    if (identifyPending) {
+      const done = Object.entries(identifyPending.expectedById).every(
+        ([id, expected]) => {
+          const d = byId.get(id);
+          const freshBundle =
+            (pollActivityFor(id)?.bundleCount ?? 0) >
+            (identifyPending.sentBundleById[id] ?? 0);
+          return d != null && freshBundle && deviceLedMode(d) === expected;
+        }
+      );
+      if (done) {
+        setLedButtonStatus(
+          ledButtonKey("global", "connected", "identify"),
+          "confirmed",
+          undefined,
+          LED_STATUS_CONFIRM_MS
+        );
+        setGlobalIdentifyPending(null);
+      } else if (now - identifyPending.startedAtMs >= LED_CONFIRM_TIMEOUT_MS) {
+        setLedButtonStatus(
+          ledButtonKey("global", "connected", "identify"),
+          "warning",
+          identifyPending.warningMessage,
+          LED_STATUS_WARN_MS
+        );
+        setGlobalIdentifyPending(null);
+      }
+    }
+
+    const mutePending = globalMutePending();
+    if (mutePending) {
+      const done = Object.entries(mutePending.expectedById).every(
+        ([id, expected]) => {
+          const d = byId.get(id);
+          const freshBundle =
+            (pollActivityFor(id)?.bundleCount ?? 0) >
+            (mutePending.sentBundleById[id] ?? 0);
+          return d != null && freshBundle && deviceLedMode(d) === expected;
+        }
+      );
+      if (done) {
+        setLedButtonStatus(
+          ledButtonKey("global", "connected", "mute"),
+          "confirmed",
+          undefined,
+          LED_STATUS_CONFIRM_MS
+        );
+        setGlobalMutePending(null);
+      } else if (now - mutePending.startedAtMs >= LED_CONFIRM_TIMEOUT_MS) {
+        setLedButtonStatus(
+          ledButtonKey("global", "connected", "mute"),
+          "warning",
+          mutePending.warningMessage,
+          LED_STATUS_WARN_MS
+        );
+        setGlobalMutePending(null);
+      }
+    }
+  });
+
+  const ledStatusFor = (key: string): LedButtonStatus =>
+    ledButtonStatusByKey()[key] ?? { state: "neutral" };
+
+  const ledIndicator = (state: LedUiState) => (
+    <span
+      class="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
+      classList={{
+        "bg-teal/25 border border-teal/50 animate-pulse": state === "pending",
+        "bg-teal/20 border border-teal text-teal text-[10px]":
+          state === "confirmed",
+        "bg-amber/20 border border-amber text-amber text-[10px]":
+          state === "warning",
+        "bg-red-500/20 border border-red-400 text-red-400 text-[10px]":
+          state === "error",
+      }}
+      aria-hidden="true"
+    >
+      <Show when={state === "confirmed"}>✓</Show>
+      <Show when={state === "warning"}>!</Show>
+      <Show when={state === "error"}>x</Show>
+    </span>
+  );
+
+  const ledActionLabel = (action: LedAction, deviceTitle?: string): string => {
+    const actionText =
+      action === "identify" ? "Identify device LEDs" : "Mute device LEDs";
+    return deviceTitle ? `${actionText} for ${deviceTitle}` : actionText;
+  };
+
+  const ledActionIcon = (action: LedAction) =>
+    action === "identify" ? (
+      <CircleDotDashedIcon class="block h-3.5 w-3.5" />
+    ) : (
+      <CircleSlash2Icon class="block h-3.5 w-3.5" />
+    );
+
+  const ledButtonInner = (action: LedAction, state: LedUiState) => (
+    <span class="relative inline-flex h-full w-full items-center justify-center">
+      <Show when={state === "neutral"} fallback={ledIndicator(state)}>
+        {ledActionIcon(action)}
+      </Show>
+    </span>
+  );
+
   return (
     <div
       data-testid="device-list"
@@ -964,8 +1556,75 @@ const DeviceList: Component<DeviceListProps> = (props) => {
             }
           >
             <Show when={connectedDevices().length > 0}>
-              <div class="text-[10px] font-medium uppercase tracking-wider text-muted">
-                Connected
+              <div class="flex items-center justify-between gap-2">
+                <div class="text-[10px] font-medium uppercase tracking-wider text-muted">
+                  Connected
+                </div>
+                <div class="flex items-center gap-1">
+                  {(() => {
+                    const key = ledButtonKey("global", "connected", "identify");
+                    const status = ledStatusFor(key);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => void toggleGlobalIdentify()}
+                        data-testid="led-global-identify"
+                        title={ledActionLabel("identify")}
+                        aria-label={ledActionLabel("identify")}
+                        aria-pressed={globalIdentifyActive()}
+                        disabled={status.state === "pending"}
+                        class="inline-flex h-6 w-6 items-center justify-center rounded border transition-colors"
+                        classList={{
+                          "border-teal/40 bg-teal/10 text-teal":
+                            globalIdentifyActive(),
+                          "border-edge bg-surface text-secondary hover:text-primary":
+                            !globalIdentifyActive(),
+                        }}
+                      >
+                        {ledButtonInner("identify", status.state)}
+                      </button>
+                    );
+                  })()}
+                  {(() => {
+                    const key = ledButtonKey("global", "connected", "mute");
+                    const status = ledStatusFor(key);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => void toggleGlobalMute()}
+                        data-testid="led-global-mute"
+                        title={ledActionLabel("mute")}
+                        aria-label={ledActionLabel("mute")}
+                        aria-pressed={globalMuteActive()}
+                        disabled={status.state === "pending"}
+                        class="inline-flex h-6 w-6 items-center justify-center rounded border transition-colors"
+                        classList={{
+                          "border-teal/40 bg-teal/10 text-teal":
+                            globalMuteActive(),
+                          "border-edge bg-surface text-secondary hover:text-primary":
+                            !globalMuteActive(),
+                        }}
+                      >
+                        {ledButtonInner("mute", status.state)}
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+            </Show>
+            <Show
+              when={
+                ledStatusFor(ledButtonKey("global", "connected", "identify"))
+                  .message ||
+                ledStatusFor(ledButtonKey("global", "connected", "mute"))
+                  .message
+              }
+            >
+              <div class="min-h-[1rem] text-[10px] text-amber">
+                {ledStatusFor(ledButtonKey("global", "connected", "identify"))
+                  .message ||
+                  ledStatusFor(ledButtonKey("global", "connected", "mute"))
+                    .message}
               </div>
             </Show>
             <For each={connectedDevices()}>
@@ -1005,6 +1664,80 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         </div>
                       </button>
                       <div class="flex items-center gap-1">
+                        {(() => {
+                          const key = ledButtonKey(
+                            "device",
+                            device.product_id,
+                            "identify"
+                          );
+                          const status = ledStatusFor(key);
+                          return (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void sendPerDeviceIdentifyToggle(device)
+                              }
+                              data-testid={`led-device-identify-${device.product_id}`}
+                              title={ledActionLabel(
+                                "identify",
+                                deviceDisplayTitle(device)
+                              )}
+                              aria-label={ledActionLabel(
+                                "identify",
+                                deviceDisplayTitle(device)
+                              )}
+                              aria-pressed={
+                                deviceLedMode(device) === "identify"
+                              }
+                              disabled={status.state === "pending"}
+                              class="inline-flex h-6 w-6 items-center justify-center rounded border transition-colors"
+                              classList={{
+                                "border-teal/40 bg-teal/10 text-teal":
+                                  deviceLedMode(device) === "identify",
+                                "border-edge bg-surface text-secondary hover:text-primary":
+                                  deviceLedMode(device) !== "identify",
+                              }}
+                            >
+                              {ledButtonInner("identify", status.state)}
+                            </button>
+                          );
+                        })()}
+                        {(() => {
+                          const key = ledButtonKey(
+                            "device",
+                            device.product_id,
+                            "mute"
+                          );
+                          const status = ledStatusFor(key);
+                          return (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void sendPerDeviceMuteToggle(device)
+                              }
+                              data-testid={`led-device-mute-${device.product_id}`}
+                              title={ledActionLabel(
+                                "mute",
+                                deviceDisplayTitle(device)
+                              )}
+                              aria-label={ledActionLabel(
+                                "mute",
+                                deviceDisplayTitle(device)
+                              )}
+                              aria-pressed={deviceLedMode(device) === "mute"}
+                              disabled={status.state === "pending"}
+                              class="inline-flex h-6 w-6 items-center justify-center rounded border transition-colors"
+                              classList={{
+                                "border-teal/40 bg-teal/10 text-teal":
+                                  deviceLedMode(device) === "mute",
+                                "border-edge bg-surface text-secondary hover:text-primary":
+                                  deviceLedMode(device) !== "mute",
+                              }}
+                            >
+                              {ledButtonInner("mute", status.state)}
+                            </button>
+                          );
+                        })()}
                         <Show when={props.onReadCurrent}>
                           <button
                             type="button"
@@ -1022,6 +1755,15 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                           URLs
                         </button>
                       </div>
+                    </div>
+                    <div class="min-h-[1rem] pt-1 text-[10px] text-amber">
+                      {ledStatusFor(
+                        ledButtonKey("device", device.product_id, "identify")
+                      ).message ||
+                        ledStatusFor(
+                          ledButtonKey("device", device.product_id, "mute")
+                        ).message ||
+                        ""}
                     </div>
                   </div>
                 );

@@ -28,6 +28,8 @@ pub struct ArtNetProduct {
     /// UDP source of the last PollReply (e.g. `127.0.0.1:6457` when Docker maps ports).
     /// Use for management traffic when it differs from advertised `ip_address`.
     pub last_reply_source: Option<SocketAddr>,
+    /// Canonical bind page for node-level actions (e.g. LED/long-name writes).
+    pub primary_bind_index: u8,
     pub mac_address: [u8; 6],
     /// Best-effort product short name (prefers bind_index == 1, else first bind).
     pub short_name: String,
@@ -38,6 +40,10 @@ pub struct ArtNetProduct {
     pub oem_code: u16,
     pub firmware_version: u16,
     pub node_report: String,
+    /// ArtPollReply Status1 from the primary bind page (includes indicator mode in bits 7..6).
+    pub status1: u8,
+    /// ArtPollReply Status2 from the primary bind page.
+    pub status2: u8,
     pub ports: Vec<ProductPort>,
     pub last_seen: std::time::Instant,
 }
@@ -200,6 +206,7 @@ impl DeviceRegistry {
             .into_iter()
             .map(|((bind_ip, mac), binds)| {
                 let ref_bind = binds.iter().min_by_key(|d| d.bind_index);
+                let primary_bind_index = ref_bind.map(|d| d.bind_index.max(1)).unwrap_or(1);
 
                 let long_name = ref_bind.map(|d| d.long_name.clone()).unwrap_or_default();
 
@@ -214,6 +221,8 @@ impl DeviceRegistry {
                 let oem_code = ref_bind.map(|d| d.oem_code).unwrap_or(0);
                 let firmware_version = ref_bind.map(|d| d.firmware_version).unwrap_or(0);
                 let node_report = ref_bind.map(|d| d.node_report.clone()).unwrap_or_default();
+                let status1 = ref_bind.map(|d| d.status1).unwrap_or(0);
+                let status2 = ref_bind.map(|d| d.status2).unwrap_or(0);
 
                 let last_seen = binds
                     .iter()
@@ -249,6 +258,7 @@ impl DeviceRegistry {
                     bind_ip,
                     ip_address,
                     last_reply_source,
+                    primary_bind_index,
                     mac_address: mac,
                     short_name,
                     long_name,
@@ -256,13 +266,15 @@ impl DeviceRegistry {
                     oem_code,
                     firmware_version,
                     node_report,
+                    status1,
+                    status2,
                     ports,
                     last_seen,
                 }
             })
             .collect();
 
-        products.sort_by(|a, b| a.bind_ip.cmp(&b.bind_ip));
+        products.sort_by_key(|a| a.bind_ip);
         products
     }
 

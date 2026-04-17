@@ -239,7 +239,14 @@ cargo run -p lumenflow_cli -- virtual-console --name "Desk B" --ip 127.0.0.3 --b
 
 ### Virtual Node
 
-Receives ArtDmx and responds to **ArtPoll** only (like real gear). Optional `--periodic-poll-reply` unicasts PollReply to `--target` for lab discovery without a poller. Use `--port 6455` when LumenFlow runs on the same machine.
+Receives ArtDmx and responds to **ArtPoll** (like real gear). In `--profile swisson-xnd8`, it also applies inbound `ArtAddress` changes for:
+
+- per-bind **Port Name** (`ArtAddress.Port Name`),
+- device **Long Name** (`ArtAddress.Long Name`),
+- LED indicator mode (`AcLedLocate` / `AcLedMute` / `AcLedNormal`) mapped to `ArtPollReply.Status1[7:6]`,
+- confirmation in `ArtPollReply.NodeReport` (`RcShNameOk` / `RcLoNameOk` and LED transition report text).
+
+Optional `--periodic-poll-reply` unicasts PollReply to `--target` for lab discovery without a poller. Use `--port 6455` when LumenFlow runs on the same machine.
 
 ```bash
 cargo run -p lumenflow_cli -- virtual-node --port 6455 --target 127.0.0.1

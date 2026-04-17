@@ -16,7 +16,7 @@ It does **not** embed the full Tauri UI, IPC bridge, or viewport-culled DMX sync
 | `send`             | Stream **ArtDmx** at a chosen rate/pattern to a target                                                   |
 | `mock-node`        | Periodically send **ArtPollReply** to a host (e.g. LumenFlow on loopback)                                |
 | `virtual-console`  | **ArtDmx** stream + reply to **ArtPoll** with **ArtPollReply** (lab console)                             |
-| `virtual-node`     | Receive **ArtDmx**, reply to **ArtPoll**, optional periodic **ArtPollReply**                             |
+| `virtual-node`     | Receive **ArtDmx**, reply to **ArtPoll**, and in `swisson-xnd8` apply `ArtAddress` LED/name updates      |
 | `send-all-packets` | Send one of each **buildable** packet type for Wireshark capture                                         |
 
 ---
@@ -29,13 +29,13 @@ Several commands take `--target` (IP or broadcast). Resolution goes through `com
 
 Run `lumenflow --help` and `lumenflow <cmd> --help` for the full list. Highlights:
 
-| Command                    | Notable flags                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------------ |
-| `listen`                   | `--universe <u16>` filter, `--json`                                                              |
-| `send` / `virtual-console` | `--rate`, `--pattern` (sine, chase, strobe, static, gradient), `--target`, `--universes`         |
-| `virtual-console`          | `--name`, `--ip` (advertised in PollReply), `--physical`, `--bind`, `--verbose`                  |
-| `virtual-node`             | `--port` (6454 vs 6455 when colliding with another listener), `--target` for proactive PollReply |
-| `poll`                     | `--timeout` seconds                                                                              |
+| Command                    | Notable flags                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `listen`                   | `--universe <u16>` filter, `--json`                                                                 |
+| `send` / `virtual-console` | `--rate`, `--pattern` (sine, chase, strobe, static, gradient), `--target`, `--universes`            |
+| `virtual-console`          | `--name`, `--ip` (advertised in PollReply), `--physical`, `--bind`, `--verbose`                     |
+| `virtual-node`             | `--profile` (`generic`/`swisson-xnd8`), `--port` (6454 vs 6455), `--target` for proactive PollReply |
+| `poll`                     | `--timeout` seconds                                                                                 |
 
 ---
 
@@ -50,7 +50,7 @@ Commands that perform **no** Art-Net I/O: `**info`\*\* (OS interfaces only).
 | `send`             | ArtDmx                                                                                                          | —                                                                                                                                                                                |
 | `mock-node`        | ArtPollReply every **2s** to `--target`                                                                         | —                                                                                                                                                                                |
 | `virtual-console`  | ArtDmx; ArtPollReply on Poll (unicast to source) + **every 2.5s** to `--target`                                 | ArtPoll                                                                                                                                                                          |
-| `virtual-node`     | ArtPollReply on Poll + **every 2.5s** to `--target`                                                             | ArtDmx, ArtPoll, ArtSync (logged if verbose)                                                                                                                                     |
+| `virtual-node`     | ArtPollReply on Poll + **every 2.5s** to `--target`                                                             | ArtDmx, ArtPoll, ArtSync; in `swisson-xnd8`: ArtAddress (port/long name + LED mode reflected in next PollReply)                                                                  |
 | `send-all-packets` | ArtPoll, ArtPollReply, ArtDmx, ArtSync, ArtAddress, ArtCommand, ArtInput, ArtTrigger, ArtIpProg, ArtDataRequest | —                                                                                                                                                                                |
 
 ---

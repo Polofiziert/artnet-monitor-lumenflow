@@ -99,14 +99,14 @@ Applies when editing files:
 
 ## File Summary
 
-| File                                           | Purpose                     |
-| ---------------------------------------------- | --------------------------- |
-| `docs/IPC_API_CONTRACT.md`                     | Full IPC contract           |
-| `docs/archive/reports/IPC_BRIDGE_REPORT.md`                    | This report                 |
-| `docs/archive/reports/IPC_API_CONTRACT_REVIEW.md`              | Subagent review (reference) |
-| `.cursor/rules/ipc-contract.mdc`               | Cursor rule                 |
-| `.cursor/skills/ipc-api-contract/SKILL.md`     | Cursor skill                |
-| `.cursor/skills/ipc-api-contract/reference.md` | Skill reference             |
+| File                                              | Purpose                     |
+| ------------------------------------------------- | --------------------------- |
+| `docs/IPC_API_CONTRACT.md`                        | Full IPC contract           |
+| `docs/archive/reports/IPC_BRIDGE_REPORT.md`       | This report                 |
+| `docs/archive/reports/IPC_API_CONTRACT_REVIEW.md` | Subagent review (reference) |
+| `.cursor/rules/ipc-contract.mdc`                  | Cursor rule                 |
+| `.cursor/skills/ipc-api-contract/SKILL.md`        | Cursor skill                |
+| `.cursor/skills/ipc-api-contract/reference.md`    | Skill reference             |
 
 ---
 
