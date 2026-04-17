@@ -186,4 +186,3 @@ Before release tag:
 - all required PR checks green
 - version bump completed in all versioned files
 - release notes drafted
-

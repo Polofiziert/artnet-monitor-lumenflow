@@ -40,7 +40,15 @@ function product(
     node_report: "OK",
     status1,
     status2: 0,
-    ports: [{ bind_index: 1, slot: 0, output_universe: 1, input_universe: null, label: "Port 1" }],
+    ports: [
+      {
+        bind_index: 1,
+        slot: 0,
+        output_universe: 1,
+        input_universe: null,
+        label: "Port 1",
+      },
+    ],
     online,
   };
 }
@@ -67,7 +75,9 @@ describe("DeviceList LED controls", () => {
     const [products, setProducts] = createSignal<ArtNetProductDto[]>([
       product("a", "10.0.0.10", 0b1100_0000), // normal
     ]);
-    const [activity, setActivity] = createSignal<Record<string, PollReplyActivity>>({
+    const [activity, setActivity] = createSignal<
+      Record<string, PollReplyActivity>
+    >({
       a: {
         pulseNonce: 1,
         lastReceivedAtMs: Date.now(),
@@ -79,7 +89,9 @@ describe("DeviceList LED controls", () => {
         bundleCount: 1,
       },
     });
-    render(() => <DeviceList products={products} pollReplyActivity={activity} />);
+    render(() => (
+      <DeviceList products={products} pollReplyActivity={activity} />
+    ));
 
     const identifyButton = await screen.findByTestId("led-device-identify-a");
     const muteButton = await screen.findByTestId("led-device-mute-a");
@@ -104,9 +116,9 @@ describe("DeviceList LED controls", () => {
 
     expect(identifyButton.querySelector("svg")).toBeTruthy();
     expect(muteButton.querySelector("svg")).toBeTruthy();
-    expect(identifyButton.querySelector("svg")?.getAttribute("aria-hidden")).toBe(
-      "true"
-    );
+    expect(
+      identifyButton.querySelector("svg")?.getAttribute("aria-hidden")
+    ).toBe("true");
 
     await fireEvent.click(identifyButton);
 
@@ -138,13 +150,14 @@ describe("DeviceList LED controls", () => {
     });
     await waitFor(() =>
       expect(
-        (screen.getByTestId("led-device-identify-a") as HTMLButtonElement).className
+        (screen.getByTestId("led-device-identify-a") as HTMLButtonElement)
+          .className
       ).toContain("border-teal/40")
     );
     expect(
-      (screen.getByTestId("led-device-identify-a") as HTMLButtonElement).getAttribute(
-        "aria-pressed"
-      )
+      (
+        screen.getByTestId("led-device-identify-a") as HTMLButtonElement
+      ).getAttribute("aria-pressed")
     ).toBe("true");
   });
 
@@ -172,13 +185,17 @@ describe("DeviceList LED controls", () => {
         bundleCount: 1,
       },
     });
-    render(() => <DeviceList products={products} pollReplyActivity={activity} />);
+    render(() => (
+      <DeviceList products={products} pollReplyActivity={activity} />
+    ));
 
     await fireEvent.click(await screen.findByTestId("led-device-mute-a"));
     vi.advanceTimersByTime(3000);
 
     await waitFor(() =>
-      expect(screen.getByText(/not confirmed because Status1 indicator bits/i)).toBeTruthy()
+      expect(
+        screen.getByText(/not confirmed because Status1 indicator bits/i)
+      ).toBeTruthy()
     );
   });
 
@@ -196,7 +213,9 @@ describe("DeviceList LED controls", () => {
       product("b", "10.0.0.11", 0b1000_0000), // mute
       product("c", "10.0.0.12", 0b1100_0000), // normal
     ]);
-    const [activity, setActivity] = createSignal<Record<string, PollReplyActivity>>({
+    const [activity, setActivity] = createSignal<
+      Record<string, PollReplyActivity>
+    >({
       a: {
         pulseNonce: 1,
         lastReceivedAtMs: Date.now(),
@@ -229,7 +248,9 @@ describe("DeviceList LED controls", () => {
       },
     });
 
-    render(() => <DeviceList products={products} pollReplyActivity={activity} />);
+    render(() => (
+      <DeviceList products={products} pollReplyActivity={activity} />
+    ));
 
     const globalIdentify = await screen.findByTestId("led-global-identify");
     await fireEvent.click(globalIdentify);
@@ -255,7 +276,8 @@ describe("DeviceList LED controls", () => {
     });
     await waitFor(() =>
       expect(
-        (screen.getByTestId("led-global-identify") as HTMLButtonElement).className
+        (screen.getByTestId("led-global-identify") as HTMLButtonElement)
+          .className
       ).toContain("border-teal/40")
     );
 
@@ -264,7 +286,10 @@ describe("DeviceList LED controls", () => {
     await waitFor(() => {
       const restoreCalls = invokeMock.mock.calls
         .filter(([cmd, args]) => cmd === "send_art_address")
-        .map(([, args]) => [args?.params?.target_ip, args?.params?.led_command]);
+        .map(([, args]) => [
+          args?.params?.target_ip,
+          args?.params?.led_command,
+        ]);
       expect(restoreCalls).toEqual(
         expect.arrayContaining([
           ["10.0.0.10", "mute"],
@@ -290,4 +315,3 @@ describe("DeviceList LED controls", () => {
     });
   });
 });
-

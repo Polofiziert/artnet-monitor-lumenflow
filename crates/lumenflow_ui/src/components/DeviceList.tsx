@@ -311,12 +311,12 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   const [ledRestoreByDevice, setLedRestoreByDevice] = createSignal<
     Record<string, { identify?: LedMode; mute?: LedMode }>
   >({});
-  const [globalIdentifySnapshot, setGlobalIdentifySnapshot] = createSignal<
-    Record<string, LedMode> | null
-  >(null);
-  const [globalMuteSnapshot, setGlobalMuteSnapshot] = createSignal<
-    Record<string, LedMode> | null
-  >(null);
+  const [globalIdentifySnapshot, setGlobalIdentifySnapshot] =
+    createSignal<Record<string, LedMode> | null>(null);
+  const [globalMuteSnapshot, setGlobalMuteSnapshot] = createSignal<Record<
+    string,
+    LedMode
+  > | null>(null);
   const [globalIdentifyPending, setGlobalIdentifyPending] =
     createSignal<GlobalLedPending | null>(null);
   const [globalMutePending, setGlobalMutePending] =
@@ -491,8 +491,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
           expectedById,
           sentBundleById,
           startedAtMs: Date.now(),
-          warningMessage:
-            "One or more devices did not confirm.",
+          warningMessage: "One or more devices did not confirm.",
         });
       }
       return;
@@ -515,14 +514,14 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     const sentBundleById: Record<string, number> = {};
     for (const d of targets) {
       expectedById[d.product_id] = snapshot[d.product_id] ?? "normal";
-      sentBundleById[d.product_id] = pollActivityFor(d.product_id)?.bundleCount ?? 0;
+      sentBundleById[d.product_id] =
+        pollActivityFor(d.product_id)?.bundleCount ?? 0;
     }
     setGlobalIdentifyPending({
       expectedById,
       sentBundleById,
       startedAtMs: Date.now(),
-      warningMessage:
-        "One or more devices did not confirm.",
+      warningMessage: "One or more devices did not confirm.",
     });
   };
 
@@ -559,8 +558,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
         expectedById,
         sentBundleById,
         startedAtMs: Date.now(),
-        warningMessage:
-          "One or more devices did not confirm.",
+        warningMessage: "One or more devices did not confirm.",
       });
       return;
     }
@@ -582,14 +580,14 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     const sentBundleById: Record<string, number> = {};
     for (const d of targets) {
       expectedById[d.product_id] = snapshot[d.product_id] ?? "normal";
-      sentBundleById[d.product_id] = pollActivityFor(d.product_id)?.bundleCount ?? 0;
+      sentBundleById[d.product_id] =
+        pollActivityFor(d.product_id)?.bundleCount ?? 0;
     }
     setGlobalMutePending({
       expectedById,
       sentBundleById,
       startedAtMs: Date.now(),
-      warningMessage:
-        "One or more devices did not confirm.",
+      warningMessage: "One or more devices did not confirm.",
     });
   };
 
@@ -632,7 +630,8 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     warningMessage: string
   ) => {
     setLedButtonStatus(buttonKey, "pending");
-    const sentBundleCount = pollActivityFor(device.product_id)?.bundleCount ?? 0;
+    const sentBundleCount =
+      pollActivityFor(device.product_id)?.bundleCount ?? 0;
     setLedPendingByButton((prev) => ({
       ...prev,
       [buttonKey]: {
@@ -1326,7 +1325,12 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       const hasFreshPollReply = bundleCount > wait.sentBundleCount;
       if (hasFreshPollReply && mode === wait.expected) {
         delete nextPending[buttonKey];
-        setLedButtonStatus(buttonKey, "confirmed", undefined, LED_STATUS_CONFIRM_MS);
+        setLedButtonStatus(
+          buttonKey,
+          "confirmed",
+          undefined,
+          LED_STATUS_CONFIRM_MS
+        );
         pendingChanged = true;
         continue;
       }
@@ -1433,8 +1437,10 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       class="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
       classList={{
         "bg-teal/25 border border-teal/50 animate-pulse": state === "pending",
-        "bg-teal/20 border border-teal text-teal text-[10px]": state === "confirmed",
-        "bg-amber/20 border border-amber text-amber text-[10px]": state === "warning",
+        "bg-teal/20 border border-teal text-teal text-[10px]":
+          state === "confirmed",
+        "bg-amber/20 border border-amber text-amber text-[10px]":
+          state === "warning",
         "bg-red-500/20 border border-red-400 text-red-400 text-[10px]":
           state === "error",
       }}
@@ -1446,10 +1452,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     </span>
   );
 
-  const ledActionLabel = (
-    action: LedAction,
-    deviceTitle?: string
-  ): string => {
+  const ledActionLabel = (action: LedAction, deviceTitle?: string): string => {
     const actionText =
       action === "identify" ? "Identify device LEDs" : "Mute device LEDs";
     return deviceTitle ? `${actionText} for ${deviceTitle}` : actionText;
@@ -1596,7 +1599,8 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                         disabled={status.state === "pending"}
                         class="inline-flex h-6 w-6 items-center justify-center rounded border transition-colors"
                         classList={{
-                          "border-teal/40 bg-teal/10 text-teal": globalMuteActive(),
+                          "border-teal/40 bg-teal/10 text-teal":
+                            globalMuteActive(),
                           "border-edge bg-surface text-secondary hover:text-primary":
                             !globalMuteActive(),
                         }}
@@ -1612,13 +1616,15 @@ const DeviceList: Component<DeviceListProps> = (props) => {
               when={
                 ledStatusFor(ledButtonKey("global", "connected", "identify"))
                   .message ||
-                ledStatusFor(ledButtonKey("global", "connected", "mute")).message
+                ledStatusFor(ledButtonKey("global", "connected", "mute"))
+                  .message
               }
             >
               <div class="min-h-[1rem] text-[10px] text-amber">
                 {ledStatusFor(ledButtonKey("global", "connected", "identify"))
                   .message ||
-                  ledStatusFor(ledButtonKey("global", "connected", "mute")).message}
+                  ledStatusFor(ledButtonKey("global", "connected", "mute"))
+                    .message}
               </div>
             </Show>
             <For each={connectedDevices()}>
@@ -1668,7 +1674,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                           return (
                             <button
                               type="button"
-                              onClick={() => void sendPerDeviceIdentifyToggle(device)}
+                              onClick={() =>
+                                void sendPerDeviceIdentifyToggle(device)
+                              }
                               data-testid={`led-device-identify-${device.product_id}`}
                               title={ledActionLabel(
                                 "identify",
@@ -1678,7 +1686,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                                 "identify",
                                 deviceDisplayTitle(device)
                               )}
-                              aria-pressed={deviceLedMode(device) === "identify"}
+                              aria-pressed={
+                                deviceLedMode(device) === "identify"
+                              }
                               disabled={status.state === "pending"}
                               class="inline-flex h-6 w-6 items-center justify-center rounded border transition-colors"
                               classList={{
@@ -1702,7 +1712,9 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                           return (
                             <button
                               type="button"
-                              onClick={() => void sendPerDeviceMuteToggle(device)}
+                              onClick={() =>
+                                void sendPerDeviceMuteToggle(device)
+                              }
                               data-testid={`led-device-mute-${device.product_id}`}
                               title={ledActionLabel(
                                 "mute",
