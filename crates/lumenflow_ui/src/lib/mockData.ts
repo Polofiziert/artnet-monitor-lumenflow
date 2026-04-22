@@ -1,7 +1,87 @@
 import type {
   ArtNetProductDto,
+  PortWireSummaryDto,
   ProductPortDto,
 } from "../components/DeviceList";
+
+/** Matches `decode_port_wire_from_poll(0x80, 0x80, 0, 0, 0x90)` — DMX out, data active, RDM on-capable node. */
+const MOCK_WIRE_DMX_OK: PortWireSummaryDto = {
+  artnet_output_capable: true,
+  artnet_input_capable: false,
+  protocol_code: 0,
+  output_sacn_selected: false,
+  input_sacn_selected: false,
+  merge_ltp: false,
+  merge_artnet_active: false,
+  output_data_active: true,
+  output_short_detected: false,
+  input_data_received: false,
+  input_receive_errors: false,
+  rdm_disabled: false,
+  node_supports_rdm_art_address: true,
+  node_supports_15bit_address: true,
+  node_can_switch_artnet_sacn: true,
+  merge_glyph_output_filled_stack: 1,
+  merge_glyph_input_lone_filled: false,
+  rdm_active_on_port: true,
+};
+
+/** Merge active + LTP (`good_output` 0x8a, status2 0). */
+const MOCK_WIRE_MERGE_LTP: PortWireSummaryDto = {
+  artnet_output_capable: true,
+  artnet_input_capable: false,
+  protocol_code: 0,
+  output_sacn_selected: false,
+  input_sacn_selected: false,
+  merge_ltp: true,
+  merge_artnet_active: true,
+  output_data_active: true,
+  output_short_detected: false,
+  input_data_received: false,
+  input_receive_errors: false,
+  rdm_disabled: false,
+  node_supports_rdm_art_address: false,
+  node_supports_15bit_address: false,
+  node_can_switch_artnet_sacn: false,
+  merge_glyph_output_filled_stack: 2,
+  merge_glyph_input_lone_filled: false,
+  rdm_active_on_port: true,
+};
+
+/** Default PollReply wire bytes for tests and mock devices. */
+export function mockProductPort(
+  slot: number,
+  outputUniverse: number,
+  label: string,
+  opts?: {
+    port_type?: number;
+    good_output?: number;
+    good_input?: number;
+    good_output_b?: number;
+    status2?: number;
+    wire?: PortWireSummaryDto;
+    input_universe?: number | null;
+  }
+): ProductPortDto {
+  const port_type = opts?.port_type ?? 0x80;
+  const good_output = opts?.good_output ?? 0x80;
+  const good_input = opts?.good_input ?? 0;
+  const good_output_b = opts?.good_output_b ?? 0;
+  const status2 = opts?.status2 ?? 0x90;
+  return {
+    bind_index: 1,
+    slot,
+    output_universe: outputUniverse,
+    input_universe: opts?.input_universe ?? null,
+    label,
+    port_type,
+    good_output,
+    good_input,
+    good_output_b,
+    status2,
+    wire: opts?.wire ?? MOCK_WIRE_DMX_OK,
+  };
+}
 
 export interface MockUniverse {
   id: number;
@@ -74,17 +154,32 @@ function mockProduct(opts: {
   oem: number;
 }): ArtNetProductDto {
   const product_id = `${opts.ip}|${opts.mac.replace(/:/g, "")}`;
-  const ports: ProductPortDto[] = opts.universes.map((u, i) => ({
-    bind_index: 1,
-    slot: i,
-    output_universe: u,
-    input_universe: null,
-    label: `Port ${i + 1}`,
-  }));
+  const ports: ProductPortDto[] = opts.universes.map((u, i) => {
+    const isMergeDemo = opts.shortName.includes("Swisson") && i === 1;
+    const isDaliDemo = opts.shortName.includes("Swisson") && i === 6;
+    if (isMergeDemo) {
+      return mockProductPort(i, u, `Port ${i + 1}`, {
+        good_output: 0x8a,
+        status2: 0,
+        wire: MOCK_WIRE_MERGE_LTP,
+      });
+    }
+    if (isDaliDemo) {
+      return mockProductPort(i, u, `Port ${i + 1}`, {
+        port_type: 0x86,
+        wire: {
+          ...MOCK_WIRE_DMX_OK,
+          protocol_code: 6,
+        },
+      });
+    }
+    return mockProductPort(i, u, `Port ${i + 1}`);
+  });
   return {
     product_id,
     bind_ip: opts.ip,
     ip_address: opts.ip,
+    primary_bind_index: 1,
     mac_address: opts.mac,
     short_name: opts.shortName,
     long_name: opts.longName,
@@ -92,6 +187,9 @@ function mockProduct(opts: {
     oem_code: opts.oem,
     firmware_version: opts.fw,
     node_report: "Mock",
+    status1: 0,
+    status2: 0x90,
+    style: 0,
     ports,
     online: true,
   };

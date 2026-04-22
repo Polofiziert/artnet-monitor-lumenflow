@@ -314,8 +314,16 @@ pub struct SwissonBindPollReplyParams {
     pub vers_info: u16,
     pub esta_man: u16,
     pub status1: u8,
-    /// Set **GoodOutput** data-available when true (recent ArtDmx on this universe).
-    pub data_on_port: bool,
+    /// Full `PortTypes[0]` byte (direction + protocol code).
+    pub port_type: u8,
+    /// Full `GoodInput[0]` byte.
+    pub good_input: u8,
+    /// Full `GoodOutput[0]` byte.
+    pub good_output: u8,
+    /// Full `GoodOutputB[0]` byte.
+    pub good_output_b: u8,
+    /// Full Status2 byte for this bind page.
+    pub status2: u8,
 }
 
 /// Builds a 239-byte **ArtPollReply** for one Swisson XND-8 bind (single output port).
@@ -351,17 +359,17 @@ pub fn build_swisson_bind_poll_reply(p: &SwissonBindPollReplyParams) -> [u8; 239
     pkt[108..108 + nr.len().min(64)].copy_from_slice(&nr[..nr.len().min(64)]);
 
     pkt[172..174].copy_from_slice(&1u16.to_be_bytes());
-    pkt[174] = 0xC0;
-    pkt[178..182].copy_from_slice(&[0x00; 4]);
-    let go = if p.data_on_port { 0x80u8 } else { 0x00u8 };
-    pkt[182..186].copy_from_slice(&[go, 0x00, 0x00, 0x00]);
+    pkt[174] = p.port_type;
+    pkt[178..182].copy_from_slice(&[p.good_input, 0x00, 0x00, 0x00]);
+    pkt[182..186].copy_from_slice(&[p.good_output, 0x00, 0x00, 0x00]);
     pkt[190] = univ;
 
     pkt[200] = ST_CONFIG;
     pkt[201..207].copy_from_slice(&p.mac);
     pkt[207..211].copy_from_slice(&octets);
     pkt[211] = p.bind_index;
-    pkt[212] = 0x08;
+    pkt[212] = p.status2;
+    pkt[213..217].copy_from_slice(&[p.good_output_b, 0x00, 0x00, 0x00]);
 
     pkt
 }
@@ -527,7 +535,11 @@ mod tests {
             vers_info: 0x0103,
             esta_man: 0x5377,
             status1: 0x02,
-            data_on_port: true,
+            port_type: 0x80,
+            good_input: 0x00,
+            good_output: 0x80,
+            good_output_b: 0x00,
+            status2: 0x08,
         };
         let pkt = build_swisson_bind_poll_reply(&p);
         match ArtNetParser::parse(&pkt) {

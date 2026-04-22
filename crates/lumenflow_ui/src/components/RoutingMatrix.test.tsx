@@ -3,6 +3,7 @@ import { render, screen } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import RoutingMatrix, { type RouteInfo } from "./RoutingMatrix";
 import type { ArtNetProductDto } from "./DeviceList";
+import { mockProductPort } from "../lib/mockData";
 
 describe("RoutingMatrix naming", () => {
   it("uses long node name with ascending index in headers and tx rows", async () => {
@@ -19,15 +20,7 @@ describe("RoutingMatrix naming", () => {
         oem_code: 0,
         firmware_version: 0,
         node_report: "OK",
-        ports: [
-          {
-            bind_index: 1,
-            slot: 0,
-            output_universe: 1,
-            input_universe: null,
-            label: "Port 2",
-          },
-        ],
+        ports: [mockProductPort(0, 1, "Port 2")],
         online: true,
       },
       {
@@ -42,15 +35,7 @@ describe("RoutingMatrix naming", () => {
         oem_code: 0,
         firmware_version: 0,
         node_report: "OK",
-        ports: [
-          {
-            bind_index: 1,
-            slot: 0,
-            output_universe: 0,
-            input_universe: null,
-            label: "Port 1",
-          },
-        ],
+        ports: [mockProductPort(0, 0, "Port 1")],
         online: true,
       },
     ];

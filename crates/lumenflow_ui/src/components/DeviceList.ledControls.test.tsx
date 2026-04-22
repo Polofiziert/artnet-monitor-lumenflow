@@ -18,6 +18,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import DeviceList, { type ArtNetProductDto } from "./DeviceList";
+import { mockProductPort } from "../lib/mockData";
 import type { PollReplyActivity } from "../hooks/useDevices";
 
 function product(
@@ -40,15 +41,8 @@ function product(
     node_report: "OK",
     status1,
     status2: 0,
-    ports: [
-      {
-        bind_index: 1,
-        slot: 0,
-        output_universe: 1,
-        input_universe: null,
-        label: "Port 1",
-      },
-    ],
+    style: 0,
+    ports: [mockProductPort(0, 1, "Port 1")],
     online,
   };
 }

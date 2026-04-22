@@ -5,7 +5,6 @@ import {
   createEffect,
   For,
   Show,
-  Index,
   onCleanup,
 } from "solid-js";
 import { open } from "@tauri-apps/plugin-shell";
@@ -13,7 +12,22 @@ import { invoke } from "@tauri-apps/api/core";
 import type { IpProgReplyDto } from "./IpProgDialog";
 import { useDiagLog, priorityColor, priorityLabel } from "../hooks/useDiagLog";
 import type { PollReplyActivity } from "../hooks/useDevices";
-import { reconcilePendingEdits, type PendingEdit } from "../lib/pendingEdits";
+import {
+  reconcilePendingEdits,
+  type EditableField,
+  type PendingEdit,
+} from "../lib/pendingEdits";
+import {
+  formatPortAddress,
+  netSubMismatchError,
+  parsePortAddress,
+} from "../lib/devicePortAddress";
+import {
+  portFieldKey,
+  outFieldKey,
+  inFieldKey,
+} from "../lib/devicePortKeys";
+import { DevicePortsPanel } from "./DevicePortsPanel";
 
 /** Art-Net 4 DataRequest types for URL fetching */
 const DR_URL_PRODUCT = 0x0001;
@@ -23,12 +37,40 @@ const DR_URL_SUPPORT = 0x0003;
 type DeviceTab = "overview" | "ports" | "diagnostics" | "comms" | "protocol";
 type DeviceFilter = "all" | "online" | "offline" | "manual";
 
+/** Node-reported port semantics (mirrors `lumenflow_core::PortWireSummary` / IPC JSON). */
+export interface PortWireSummaryDto {
+  artnet_output_capable: boolean;
+  artnet_input_capable: boolean;
+  protocol_code: number;
+  output_sacn_selected: boolean;
+  input_sacn_selected: boolean;
+  merge_ltp: boolean;
+  merge_artnet_active: boolean;
+  output_data_active: boolean;
+  output_short_detected: boolean;
+  input_data_received: boolean;
+  input_receive_errors: boolean;
+  rdm_disabled: boolean;
+  node_supports_rdm_art_address: boolean;
+  node_supports_15bit_address: boolean;
+  node_can_switch_artnet_sacn: boolean;
+  merge_glyph_output_filled_stack: number;
+  merge_glyph_input_lone_filled: boolean;
+  rdm_active_on_port: boolean;
+}
+
 export interface ProductPortDto {
   bind_index: number;
   slot: number;
   output_universe: number;
   input_universe?: number | null;
   label: string;
+  port_type: number;
+  good_output: number;
+  good_input: number;
+  good_output_b: number;
+  status2: number;
+  wire: PortWireSummaryDto;
 }
 
 /** One physical Art-Net node (merged BindIndex pages). */
@@ -50,6 +92,8 @@ export interface ArtNetProductDto {
   status1?: number;
   /** ArtPollReply Status2 (bit 5 = squawking). */
   status2?: number;
+  /** ArtPollReply `Style` (Table 4); `0` = StNode. */
+  style?: number;
   ports: ProductPortDto[];
   online?: boolean;
 }
@@ -99,7 +143,6 @@ interface PollReplyPulseDotProps {
   testId?: string | undefined;
 }
 
-type EditableField = "ip" | "long_name" | "port_name" | "port_out" | "port_in";
 type LedMode = "unknown" | "identify" | "mute" | "normal";
 type LedCommand = "identify" | "mute" | "normal";
 type LedUiState = "neutral" | "pending" | "confirmed" | "warning" | "error";
@@ -209,42 +252,10 @@ function syntheticProduct(entry: ManualDeviceEntry): ArtNetProductDto {
     node_report: "",
     status1: 0,
     status2: 0,
+    style: 0,
     ports: [],
     online: false,
   };
-}
-
-function formatPortAddress(p: number): string {
-  const net = (p >> 8) & 0x7f;
-  const sub = (p >> 4) & 0x0f;
-  const uni = p & 0x0f;
-  return `${net}:${sub}:${uni}`;
-}
-
-function parsePortAddress(input: string): { value?: number; error?: string } {
-  const s = input.trim();
-  if (!s) return { error: "Empty port address." };
-  if (/^\d+$/.test(s)) {
-    const v = Number(s);
-    if (!Number.isFinite(v) || v < 0 || v > 0x7fff) {
-      return { error: "Port address must be 0..32767." };
-    }
-    return { value: v };
-  }
-  const parts = s.split(":").map((p) => p.trim());
-  if (parts.length !== 3)
-    return { error: "Expected Net:SubNet:Universe (e.g. 0:0:1)." };
-  const [netS, subS, uniS] = parts;
-  const net = Number(netS);
-  const sub = Number(subS);
-  const uni = Number(uniS);
-  if (![net, sub, uni].every((n) => Number.isInteger(n))) {
-    return { error: "Net/SubNet/Universe must be integers." };
-  }
-  if (net < 0 || net > 127) return { error: "Net must be 0..127." };
-  if (sub < 0 || sub > 15) return { error: "SubNet must be 0..15." };
-  if (uni < 0 || uni > 15) return { error: "Universe must be 0..15." };
-  return { value: (net << 8) | (sub << 4) | uni };
 }
 
 function hex(value: number, width = 2): string {
@@ -270,6 +281,12 @@ const DeviceList: Component<DeviceListProps> = (props) => {
   const [selectedProductId, setSelectedProductId] = createSignal<string | null>(
     null
   );
+  const [selectedDeviceIdentity, setSelectedDeviceIdentity] = createSignal<
+    string | null
+  >(null);
+  const [portsViewModeByIdentity, setPortsViewModeByIdentity] = createSignal<
+    Record<string, "table" | "card">
+  >({});
   const [filter, setFilter] = createSignal("");
   const [deviceFilter, setDeviceFilter] = createSignal<DeviceFilter>("all");
   const [detailTab, setDetailTab] = createSignal<DeviceTab>("overview");
@@ -591,10 +608,37 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     });
   };
 
+  const stableDeviceIdentity = (device: ArtNetProductDto): string => {
+    const mac = device.mac_address.trim().toUpperCase();
+    if (mac && mac !== "00:00:00:00:00:00") return `mac:${mac}`;
+    return `ip:${device.ip_address.trim()}`;
+  };
+
   const selectedDevice = createMemo(() => {
+    const products = mergedProducts();
     const id = selectedProductId();
-    if (!id) return undefined;
-    return mergedProducts().find((d) => d.product_id === id);
+    if (id) {
+      const byId = products.find((d) => d.product_id === id);
+      if (byId) return byId;
+    }
+    const identity = selectedDeviceIdentity();
+    if (!identity) return undefined;
+    return products.find(
+      (candidate) => stableDeviceIdentity(candidate) === identity
+    );
+  });
+
+  createEffect(() => {
+    const selected = selectedDevice();
+    if (!selected) return;
+    const identity = stableDeviceIdentity(selected);
+    if (selectedDeviceIdentity() !== identity) {
+      setSelectedDeviceIdentity(identity);
+    }
+    if (selectedProductId() !== selected.product_id) {
+      // Preserve active inline editing state while rebinding across refreshes.
+      setSelectedProductId(selected.product_id);
+    }
   });
 
   const deviceLedMode = (device: ArtNetProductDto): LedMode =>
@@ -745,13 +789,6 @@ const DeviceList: Component<DeviceListProps> = (props) => {
     setEditingValue(currentValue);
   };
 
-  const portFieldKey = (bindIndex: number, slot: number) =>
-    `port:${bindIndex}:${slot}`;
-  const outFieldKey = (bindIndex: number, slot: number) =>
-    `out:${bindIndex}:${slot}`;
-  const inFieldKey = (bindIndex: number, slot: number) =>
-    `in:${bindIndex}:${slot}`;
-
   const markPendingEdit = (
     key: string,
     productId: string,
@@ -769,6 +806,24 @@ const DeviceList: Component<DeviceListProps> = (props) => {
         sentAtBundleCount: selectedPollBundleCount(),
       },
     }));
+  };
+
+  /** Queue PollReply reconciliation for bulk port wire / label / universe edits. */
+  const registerPollReplyPendings = (
+    entries: Array<{
+      key: string;
+      field: EditableField;
+      expectedValue: string;
+      baselineValue: string;
+    }>
+  ) => {
+    const device = selectedDevice();
+    if (!device) return;
+    const productId = device.product_id;
+    for (const e of entries) {
+      markPendingEdit(e.key, productId, e.field, e.expectedValue, e.baselineValue);
+    }
+    void props.onReadCurrent?.();
   };
 
   const setLoadingForField = (key: string, loading: boolean) => {
@@ -803,6 +858,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
 
   const selectDevice = (device: ArtNetProductDto) => {
     setSelectedProductId(device.product_id);
+    setSelectedDeviceIdentity(stableDeviceIdentity(device));
     if (detailTab() === "comms") setDetailTab("overview");
     setEditingIp(false);
     setEditingLongName(false);
@@ -1125,14 +1181,15 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       return;
     }
     const nextAddr = parsed.value!;
-    // Safety: only allow changing the universe nibble unless Net/SubNet match current.
-    if (((nextAddr >> 4) & 0x7ff) !== ((currentValue >> 4) & 0x7ff)) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [key]:
-          "Changing Net/SubNet via ArtAddress is not supported yet. Keep Net/SubNet the same and adjust only Universe (last digit).",
-      }));
-      return;
+    const portRow = device.ports.find(
+      (p) => p.bind_index === bindIndex && p.slot === slot
+    );
+    if (!portRow?.wire.node_supports_15bit_address) {
+      const err = netSubMismatchError(nextAddr, currentValue);
+      if (err) {
+        setFieldErrors((prev) => ({ ...prev, [key]: err }));
+        return;
+      }
     }
 
     setFieldErrors((prev) => ({ ...prev, [key]: "" }));
@@ -1150,6 +1207,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
         long_name: null,
         port_name: null,
         set_output_universe: { slot, universe: nextAddr },
+        device_status2: portRow?.status2 ?? device.status2 ?? null,
       },
     })
       .then(() => {
@@ -1186,14 +1244,16 @@ const DeviceList: Component<DeviceListProps> = (props) => {
       return;
     }
     const nextAddr = parsed.value!;
-    const baselineNetSub = (currentValue ?? outputUniverseForBaseline) >> 4;
-    if (((nextAddr >> 4) & 0x7ff) !== (baselineNetSub & 0x7ff)) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [key]:
-          "Changing Net/SubNet via ArtAddress is not supported yet. Keep Net/SubNet the same and adjust only Universe (last digit).",
-      }));
-      return;
+    const baselineAddr = currentValue ?? outputUniverseForBaseline;
+    const portRow = device.ports.find(
+      (p) => p.bind_index === bindIndex && p.slot === slot
+    );
+    if (!portRow?.wire.node_supports_15bit_address) {
+      const err = netSubMismatchError(nextAddr, baselineAddr);
+      if (err) {
+        setFieldErrors((prev) => ({ ...prev, [key]: err }));
+        return;
+      }
     }
 
     setFieldErrors((prev) => ({ ...prev, [key]: "" }));
@@ -1211,6 +1271,7 @@ const DeviceList: Component<DeviceListProps> = (props) => {
         long_name: null,
         port_name: null,
         set_input_universe: { slot, universe: nextAddr },
+        device_status2: portRow?.status2 ?? device.status2 ?? null,
       },
     })
       .then(() => {
@@ -2328,328 +2389,37 @@ const DeviceList: Component<DeviceListProps> = (props) => {
                 </Show>
 
                 <Show when={detailTab() === "ports"}>
-                  <div class="space-y-2 text-xs">
-                    <div class="max-h-[14rem] overflow-auto rounded border border-edge">
-                      <table class="w-full text-left text-[11px]">
-                        <thead class="sticky top-0 border-b border-edge bg-surface text-[10px] uppercase tracking-wide text-muted">
-                          <tr>
-                            <th class="px-2 py-1">Bind</th>
-                            <th class="px-2 py-1">Label</th>
-                            <th class="px-2 py-1">Out</th>
-                            <th class="px-2 py-1">In</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <Index each={device().ports}>
-                            {(p) => (
-                              <tr class="border-b border-edge/40">
-                                <td class="px-2 py-1 font-mono text-secondary">
-                                  {p().bind_index}
-                                </td>
-                                <td
-                                  class="px-2 py-1 text-primary"
-                                  aria-busy={
-                                    isFieldBusy(
-                                      portFieldKey(p().bind_index, p().slot)
-                                    )
-                                      ? "true"
-                                      : "false"
-                                  }
-                                >
-                                  <Show
-                                    when={
-                                      editingPortKey() ===
-                                      portFieldKey(p().bind_index, p().slot)
-                                    }
-                                    fallback={
-                                      <button
-                                        type="button"
-                                        class="w-full truncate text-left text-primary hover:text-teal"
-                                        title="Double-click to edit port name"
-                                        onDblClick={() => {
-                                          beginEdit(
-                                            portFieldKey(
-                                              p().bind_index,
-                                              p().slot
-                                            ),
-                                            p().label
-                                          );
-                                          setEditingPortKey(
-                                            portFieldKey(
-                                              p().bind_index,
-                                              p().slot
-                                            )
-                                          );
-                                        }}
-                                      >
-                                        {p().label}
-                                      </button>
-                                    }
-                                  >
-                                    <input
-                                      autofocus
-                                      maxlength={17}
-                                      value={editingValue()}
-                                      onInput={(e) =>
-                                        setEditingValue(e.currentTarget.value)
-                                      }
-                                      onBlur={() => setEditingPortKey(null)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape")
-                                          setEditingPortKey(null);
-                                        if (e.key === "Enter") {
-                                          void submitPortNameEdit(
-                                            p().bind_index,
-                                            p().slot,
-                                            p().label
-                                          );
-                                        }
-                                      }}
-                                      class="w-full rounded border border-edge-active bg-surface px-2 py-1 text-[11px] text-primary focus:border-teal/40 focus:outline-none"
-                                    />
-                                  </Show>
-                                  <div class="mt-0.5 flex min-h-[1rem] flex-wrap items-center gap-1.5 text-[10px] text-teal">
-                                    {fieldSpinner(
-                                      portFieldKey(p().bind_index, p().slot)
-                                    )}
-                                    <Show
-                                      when={isFieldBusy(
-                                        portFieldKey(p().bind_index, p().slot)
-                                      )}
-                                    >
-                                      <span class="text-muted">Waiting…</span>
-                                    </Show>
-                                  </div>
-                                  <Show
-                                    when={
-                                      pendingEdits()[
-                                        portFieldKey(p().bind_index, p().slot)
-                                      ]?.warning
-                                    }
-                                  >
-                                    <div class="mt-1 text-[10px] text-amber">
-                                      {
-                                        pendingEdits()[
-                                          portFieldKey(p().bind_index, p().slot)
-                                        ]?.warning
-                                      }
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      fieldErrors()[
-                                        portFieldKey(p().bind_index, p().slot)
-                                      ]
-                                    }
-                                  >
-                                    <div class="mt-1 text-[10px] text-error">
-                                      {
-                                        fieldErrors()[
-                                          portFieldKey(p().bind_index, p().slot)
-                                        ]
-                                      }
-                                    </div>
-                                  </Show>
-                                </td>
-                                <td class="px-2 py-1 font-mono text-secondary">
-                                  <Show
-                                    when={
-                                      editingPortKey() ===
-                                      outFieldKey(p().bind_index, p().slot)
-                                    }
-                                    fallback={
-                                      <button
-                                        type="button"
-                                        class="w-full truncate text-left font-mono text-secondary hover:text-teal"
-                                        title="Double-click to edit output port address"
-                                        onDblClick={() => {
-                                          beginEdit(
-                                            outFieldKey(
-                                              p().bind_index,
-                                              p().slot
-                                            ),
-                                            formatPortAddress(
-                                              p().output_universe
-                                            )
-                                          );
-                                          setEditingPortKey(
-                                            outFieldKey(
-                                              p().bind_index,
-                                              p().slot
-                                            )
-                                          );
-                                        }}
-                                      >
-                                        {formatPortAddress(p().output_universe)}
-                                      </button>
-                                    }
-                                  >
-                                    <input
-                                      autofocus
-                                      value={editingValue()}
-                                      onInput={(e) =>
-                                        setEditingValue(e.currentTarget.value)
-                                      }
-                                      onBlur={() => setEditingPortKey(null)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape")
-                                          setEditingPortKey(null);
-                                        if (e.key === "Enter") {
-                                          void submitPortOutEdit(
-                                            p().bind_index,
-                                            p().slot,
-                                            p().output_universe
-                                          );
-                                        }
-                                      }}
-                                      class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
-                                    />
-                                  </Show>
-                                  <div class="text-[10px] text-teal">
-                                    {fieldSpinner(
-                                      outFieldKey(p().bind_index, p().slot)
-                                    )}
-                                  </div>
-                                  <Show
-                                    when={
-                                      pendingEdits()[
-                                        outFieldKey(p().bind_index, p().slot)
-                                      ]?.warning
-                                    }
-                                  >
-                                    <div class="mt-1 text-[10px] text-amber">
-                                      {
-                                        pendingEdits()[
-                                          outFieldKey(p().bind_index, p().slot)
-                                        ]?.warning
-                                      }
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      fieldErrors()[
-                                        outFieldKey(p().bind_index, p().slot)
-                                      ]
-                                    }
-                                  >
-                                    <div class="mt-1 text-[10px] text-error">
-                                      {
-                                        fieldErrors()[
-                                          outFieldKey(p().bind_index, p().slot)
-                                        ]
-                                      }
-                                    </div>
-                                  </Show>
-                                </td>
-                                <td class="px-2 py-1 font-mono text-secondary">
-                                  <Show
-                                    when={
-                                      editingPortKey() ===
-                                      inFieldKey(p().bind_index, p().slot)
-                                    }
-                                    fallback={
-                                      <button
-                                        type="button"
-                                        class="w-full truncate text-left font-mono text-secondary hover:text-teal"
-                                        title="Double-click to edit input port address"
-                                        onDblClick={() => {
-                                          const inputUniverse =
-                                            p().input_universe ?? null;
-                                          beginEdit(
-                                            inFieldKey(
-                                              p().bind_index,
-                                              p().slot
-                                            ),
-                                            inputUniverse != null
-                                              ? formatPortAddress(inputUniverse)
-                                              : ""
-                                          );
-                                          setEditingPortKey(
-                                            inFieldKey(p().bind_index, p().slot)
-                                          );
-                                        }}
-                                      >
-                                        {(() => {
-                                          const inputUniverse =
-                                            p().input_universe ?? null;
-                                          return inputUniverse != null
-                                            ? formatPortAddress(inputUniverse)
-                                            : "—";
-                                        })()}
-                                      </button>
-                                    }
-                                  >
-                                    <input
-                                      autofocus
-                                      value={editingValue()}
-                                      onInput={(e) =>
-                                        setEditingValue(e.currentTarget.value)
-                                      }
-                                      onBlur={() => setEditingPortKey(null)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape")
-                                          setEditingPortKey(null);
-                                        if (e.key === "Enter") {
-                                          void submitPortInEdit(
-                                            p().bind_index,
-                                            p().slot,
-                                            p().input_universe,
-                                            p().output_universe
-                                          );
-                                        }
-                                      }}
-                                      class="w-full rounded border border-edge-active bg-surface px-2 py-1 font-mono text-[11px] text-primary focus:border-teal/40 focus:outline-none"
-                                    />
-                                  </Show>
-                                  <div class="text-[10px] text-teal">
-                                    {fieldSpinner(
-                                      inFieldKey(p().bind_index, p().slot)
-                                    )}
-                                  </div>
-                                  <Show
-                                    when={
-                                      pendingEdits()[
-                                        inFieldKey(p().bind_index, p().slot)
-                                      ]?.warning
-                                    }
-                                  >
-                                    <div class="mt-1 text-[10px] text-amber">
-                                      {
-                                        pendingEdits()[
-                                          inFieldKey(p().bind_index, p().slot)
-                                        ]?.warning
-                                      }
-                                    </div>
-                                  </Show>
-                                  <Show
-                                    when={
-                                      fieldErrors()[
-                                        inFieldKey(p().bind_index, p().slot)
-                                      ]
-                                    }
-                                  >
-                                    <div class="mt-1 text-[10px] text-error">
-                                      {
-                                        fieldErrors()[
-                                          inFieldKey(p().bind_index, p().slot)
-                                        ]
-                                      }
-                                    </div>
-                                  </Show>
-                                </td>
-                              </tr>
-                            )}
-                          </Index>
-                        </tbody>
-                      </table>
-                    </div>
-                    <Show when={device().ports.length === 0}>
-                      <div class="text-[11px] text-muted">
-                        No ports reported (e.g. manual entry or controller with
-                        no DMX outputs).
-                      </div>
-                    </Show>
-                  </div>
+                  <DevicePortsPanel
+                    device={device}
+                    deviceIdentity={stableDeviceIdentity(device())}
+                    viewMode={() =>
+                      portsViewModeByIdentity()[
+                        stableDeviceIdentity(device())
+                      ] ?? "table"
+                    }
+                    setViewMode={(mode) => {
+                      const identity = stableDeviceIdentity(device());
+                      setPortsViewModeByIdentity((prev) =>
+                        prev[identity] === mode
+                          ? prev
+                          : { ...prev, [identity]: mode }
+                      );
+                    }}
+                    editingPortKey={editingPortKey}
+                    setEditingPortKey={setEditingPortKey}
+                    editingValue={editingValue}
+                    setEditingValue={setEditingValue}
+                    beginEdit={beginEdit}
+                    submitPortNameEdit={submitPortNameEdit}
+                    submitPortOutEdit={submitPortOutEdit}
+                    submitPortInEdit={submitPortInEdit}
+                    isFieldBusy={isFieldBusy}
+                    fieldSpinner={fieldSpinner}
+                    pendingEdits={pendingEdits}
+                    registerPollReplyPendings={registerPollReplyPendings}
+                    fieldErrors={fieldErrors}
+                    onReadCurrent={props.onReadCurrent}
+                  />
                 </Show>
 
                 <Show when={detailTab() === "diagnostics"}>

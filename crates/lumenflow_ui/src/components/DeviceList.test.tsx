@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import DeviceList, { type ArtNetProductDto } from "./DeviceList";
+import { mockProductPort } from "../lib/mockData";
 import type { PollReplyActivity } from "../hooks/useDevices";
 import { reconcilePendingEdits } from "../lib/pendingEdits";
 import type { PendingEdit } from "../lib/pendingEdits";
@@ -184,7 +185,7 @@ describe("pending edit reconciliation", () => {
 
     const key = "long_name";
     const warning =
-      "Node did not take the new value (latest ArtPollReply is unchanged).";
+      "Node did not take the new value (latest ArtPollReply is unchanged). Next: trigger ArtPoll (or wait for the device's reply cycle) and compare the relevant PollReply fields to your intent.";
     const pending = {
       [key]: {
         productId: product.product_id,
@@ -243,7 +244,7 @@ describe("pending edit reconciliation", () => {
         baselineValue: "Old Name",
         sentAtBundleCount: 1,
         warning:
-          "Node did not take the new value (latest ArtPollReply is unchanged).",
+          "Node did not take the new value (latest ArtPollReply is unchanged). Next: trigger ArtPoll (or wait for the device's reply cycle) and compare the relevant PollReply fields to your intent.",
         warningExpiresAtMs: 1000,
       },
     };
@@ -284,13 +285,7 @@ describe("pending edit reconciliation", () => {
       firmware_version: 1,
       node_report: "",
       ports: [
-        {
-          bind_index: 1,
-          slot: 0,
-          label: "P1",
-          input_universe: 0x0101,
-          output_universe: 0x0102,
-        },
+        mockProductPort(0, 0x0102, "P1", { input_universe: 0x0101 }),
       ],
       online: true,
     };
@@ -426,15 +421,7 @@ describe("port name inline edit focus", () => {
       oem_code: 0x1234,
       firmware_version: 0x0100,
       node_report: "OK",
-      ports: [
-        {
-          bind_index: 1,
-          slot: 0,
-          output_universe: 0,
-          input_universe: null,
-          label,
-        },
-      ],
+      ports: [mockProductPort(0, 0, label)],
       online: true,
     });
 

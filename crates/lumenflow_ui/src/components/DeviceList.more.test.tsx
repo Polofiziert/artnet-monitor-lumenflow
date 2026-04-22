@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import DeviceList, { type ArtNetProductDto } from "./DeviceList";
+import { mockProductPort } from "../lib/mockData";
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => () => {}),
@@ -25,15 +26,7 @@ describe("DeviceList extra coverage", () => {
       oem_code: 0,
       firmware_version: 1,
       node_report: "",
-      ports: [
-        {
-          bind_index: 1,
-          slot: 0,
-          label: "P1",
-          input_universe: 0x0001,
-          output_universe: 0x0002,
-        },
-      ],
+      ports: [mockProductPort(0, 0x0002, "P1", { input_universe: 0x0001 })],
       online: true,
     };
 

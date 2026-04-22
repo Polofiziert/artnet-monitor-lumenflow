@@ -15,6 +15,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import DeviceList, { type ArtNetProductDto } from "./DeviceList";
+import { mockProductPort } from "../lib/mockData";
 
 describe("DeviceList ports + URLs flows", () => {
   beforeEach(() => {
@@ -69,7 +70,7 @@ describe("DeviceList ports + URLs flows", () => {
     });
   });
 
-  it("submits port out/in edits via ArtAddress", async () => {
+  it("submits port label edit via ArtAddress", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     (invoke as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
@@ -85,15 +86,7 @@ describe("DeviceList ports + URLs flows", () => {
       oem_code: 0,
       firmware_version: 1,
       node_report: "OK",
-      ports: [
-        {
-          bind_index: 1,
-          slot: 0,
-          label: "Port 1",
-          input_universe: 0x0001,
-          output_universe: 0x0002,
-        },
-      ],
+      ports: [mockProductPort(0, 0x0002, "Port 1", { input_universe: 0x0001 })],
       online: true,
     };
     const [products] = createSignal<ArtNetProductDto[]>([product]);
@@ -102,21 +95,10 @@ describe("DeviceList ports + URLs flows", () => {
     fireEvent.click(await screen.findByText(/Node Long/));
     fireEvent.click(screen.getByText("ports"));
 
-    // Output edit: same net/subnet (0:0:*) to pass safety check.
-    fireEvent.dblClick(
-      screen.getByTitle("Double-click to edit output port address")
-    );
-    const outInput = screen.getByDisplayValue("0:0:2") as HTMLInputElement;
-    fireEvent.input(outInput, { target: { value: "0:0:3" } });
-    fireEvent.keyDown(outInput, { key: "Enter" });
-
-    // Input edit.
-    fireEvent.dblClick(
-      screen.getByTitle("Double-click to edit input port address")
-    );
-    const inInput = screen.getByDisplayValue("0:0:1") as HTMLInputElement;
-    fireEvent.input(inInput, { target: { value: "0:0:4" } });
-    fireEvent.keyDown(inInput, { key: "Enter" });
+    fireEvent.dblClick(screen.getByTitle("Double-click to edit port name"));
+    const nameInput = screen.getByDisplayValue("Port 1") as HTMLInputElement;
+    fireEvent.input(nameInput, { target: { value: "Front Truss" } });
+    fireEvent.keyDown(nameInput, { key: "Enter" });
 
     expect(invoke).toHaveBeenCalled();
   });
