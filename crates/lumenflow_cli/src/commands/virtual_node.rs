@@ -302,7 +302,7 @@ impl VirtualNodeState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum VirtualPortDirection {
+pub enum VirtualPortDirection {
     Output,
     Input,
     Bidirectional,
@@ -501,6 +501,42 @@ impl VirtualNodeProfile {
             _ => anyhow::bail!("unknown profile '{s}'. Use: generic, swisson-xnd8"),
         }
     }
+}
+
+pub fn parse_protocol_code(s: &str) -> Result<u8> {
+    let key = s.trim().to_ascii_lowercase();
+    let code = match key.as_str() {
+        "dmx" | "dmx512" => 0,
+        "midi" => 1,
+        "avab" => 2,
+        "colortran" | "cmx" => 3,
+        "adb" | "adb62.5" => 4,
+        "artnet" => 5,
+        "dali" => 6,
+        other => {
+            return Err(anyhow::anyhow!(
+                "unknown protocol '{}'. Use: dmx512, midi, avab, colortran, adb, artnet, dali",
+                other
+            ))
+        }
+    };
+    Ok(code)
+}
+
+pub fn parse_port_direction(s: &str) -> Result<VirtualPortDirection> {
+    let key = s.trim().to_ascii_lowercase();
+    let direction = match key.as_str() {
+        "output" | "out" | "tx" => VirtualPortDirection::Output,
+        "input" | "in" | "rx" => VirtualPortDirection::Input,
+        "bidir" | "bidirectional" | "both" => VirtualPortDirection::Bidirectional,
+        other => {
+            return Err(anyhow::anyhow!(
+                "unknown direction '{}'. Use: output, input, bidirectional",
+                other
+            ))
+        }
+    };
+    Ok(direction)
 }
 
 fn directed_broadcast(ip: std::net::Ipv4Addr) -> std::net::Ipv4Addr {
