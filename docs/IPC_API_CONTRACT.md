@@ -53,7 +53,7 @@ This document defines the complete contract between the Tauri/Rust backend and t
 | `get_diag_entries`           | FE → BE   | —                                            | `DiagEntryDto[]`        | Snapshot of diagnostic log. Used for initial load; `diag-entry` event for live updates.                                                                                         |
 | `get_controllers`            | FE → BE   | —                                            | `ControllerSeenDto[]`   | List of controllers observed via incoming ArtPoll packets (best-effort; may not be nodes).                                                                                      |
 | `send_ip_prog`               | FE → BE   | `IpProgParams`                               | `IpProgReplyDto`        | Send ArtIpProg unicast to target device. Read-only or programming mode.                                                                                                         |
-| `send_art_address`           | FE → BE   | `ArtAddressParams`                           | `void`                  | Send ArtAddress unicast to program names, per-port In/Out, and LED indicator commands (`identify`/`mute`/`normal`). Verify via subsequent ArtPollReply.                         |
+| `send_art_address`           | FE → BE   | `{ params: ArtAddressParams }`               | `void`                  | Send ArtAddress unicast to program names, per-port In/Out, LED indicator commands, or command-only `port_wire_command`. Verify via subsequent ArtPollReply.                     |
 | `request_device_url`         | FE → BE   | `{ target_ip, esta_man, oem, request_type }` | `string`                | Fetch product/user guide/support URL via ArtDataRequest. Use `oem` (not `oem_code`) as key; value from `ArtNetProductDto.oem_code` (or `DeviceInfoDto` for flat `get_devices`). |
 | `get_network_interfaces_cmd` | FE → BE   | —                                            | `NetworkInterfaceDto[]` | List IPv4 network interfaces (name, ip, subnet, broadcast). Used for NIC selection in Settings.                                                                                 |
 | `get_network_settings_cmd`   | FE → BE   | —                                            | `NetworkSettingsDto`    | Persisted network config (interface mode, CIDR, discovery targets).                                                                                                             |
@@ -214,12 +214,42 @@ interface DeviceInfoDto {
 ### 5.1a ProductPortDto & ArtNetProductDto
 
 ```typescript
+/** Decoded ArtPollReply per-port fields (node-reported; see `lumenflow_core::PortWireSummary`). */
+interface PortWireSummaryDto {
+  artnet_output_capable: boolean;
+  artnet_input_capable: boolean;
+  protocol_code: number; // PortTypes bits 5..0
+  output_sacn_selected: boolean;
+  input_sacn_selected: boolean;
+  merge_ltp: boolean;
+  merge_artnet_active: boolean;
+  output_data_active: boolean;
+  output_short_detected: boolean;
+  input_data_received: boolean;
+  input_receive_errors: boolean;
+  rdm_disabled: boolean;
+  node_supports_rdm_art_address: boolean;
+  /** ArtPollReply Status2 bit 3 — 15-bit port-address support. */
+  node_supports_15bit_address: boolean;
+  /** ArtPollReply Status2 bit 4 — Art-Net vs sACN selection via ArtAddress. */
+  node_can_switch_artnet_sacn: boolean;
+  merge_glyph_output_filled_stack: number; // 0 | 1 | 2 for UI merge glyph
+  merge_glyph_input_lone_filled: boolean;
+  rdm_active_on_port: boolean;
+}
+
 interface ProductPortDto {
   bind_index: number;
   slot: number;
   output_universe: number; // 15-bit port-address
   input_universe: number | null;
   label: string;
+  port_type: number; // PortTypes[slot]
+  good_output: number;
+  good_input: number;
+  good_output_b: number;
+  status2: number; // Status2 from owning bind page
+  wire: PortWireSummaryDto;
 }
 
 interface ArtNetProductDto {
@@ -235,8 +265,10 @@ interface ArtNetProductDto {
   oem_code: number;
   firmware_version: number;
   node_report: string;
+  /** ArtPollReply `Style` (Table 4). `0` = StNode (typical DMX node). */
+  style: number;
   status1: number; // ArtPollReply Status1, bits 7..6 = indicator mode
-  status2: number; // ArtPollReply Status2, bit 5 = squawking
+  status2: number; // ArtPollReply Status2 (squawking bit5, sACN-switch bit4, 15-bit bit3, RDM-via-ArtAddress bit7, …)
   ports: ProductPortDto[];
   online: boolean;
 }
@@ -331,6 +363,25 @@ interface IpProgReplyDto {
 ### 5.4a ArtAddressParams
 
 ```typescript
+/** Command-only ArtAddress (`Command` + `BindIndex`); exclusive with name/universe/LED fields. */
+interface PortWireCommandDto {
+  op:
+    | "merge_ltp"
+    | "merge_htp"
+    | "direction_tx"
+    | "direction_rx"
+    | "select_artnet"
+    | "select_sacn"
+    | "rdm_enable"
+    | "rdm_disable"
+    | "cancel_merge"
+    | "clear_buffer"
+    | "style_delta"
+    | "style_const";
+  bind_index: number;
+  slot: number; // 0..3 (ignored for cancel_merge; still send 0)
+}
+
 interface ArtAddressParams {
   target_ip: string;
   transport?: string | null;
@@ -340,8 +391,14 @@ interface ArtAddressParams {
   set_output_universe?: { slot: number; universe: number } | null;
   set_input_universe?: { slot: number; universe: number } | null;
   led_command?: "identify" | "mute" | "normal" | null;
+  /** When set, sends a command-only ArtAddress packet. Must match `bind_index`. */
+  port_wire_command?: PortWireCommandDto | null;
+  /** PollReply Status2 from the node; used to gate `select_*` and `rdm_*` ops. If omitted, treated as 0 (fail-closed for gated ops). */
+  device_status2?: number | null;
 }
 ```
+
+Tauri v2: call as `invoke("send_art_address", { params: { /* ArtAddressFields */ } })`.
 
 ---
 

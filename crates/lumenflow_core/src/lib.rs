@@ -7,7 +7,8 @@ pub mod engine;
 pub mod network;
 
 pub use artnet::{
-    build_art_address, build_art_command, build_art_data_request, build_art_dmx, build_art_input,
+    build_art_address, build_art_address_command_only, build_art_command, build_art_data_request,
+    build_art_dmx, build_art_input,
     build_art_ip_prog, build_art_ip_prog_reply, build_art_sync, build_art_tod_data,
     build_art_trigger, build_mock_poll_reply, build_our_poll_reply, build_swisson_bind_poll_reply,
     parse_art_tod_control, parse_art_tod_request,
@@ -19,7 +20,10 @@ pub use artnet::{
     ART_COMMAND_DATA_MAX, ART_TRIGGER_OEM_UNIVERSAL, DR_URL_PRODUCT, TOD_CMD_FULL, TOD_CTRL_FLUSH,
 };
 pub use buffer::{epoch_nanos, UniverseBuffer, UniverseStore};
-pub use device::{ArtNetProduct, DeviceInfo, DeviceRegistry, PortDirection, PortInfo, ProductPort};
+pub use device::{
+    decode_port_wire_from_poll, port_protocol_name, split_15bit_port_address, ArtNetProduct,
+    DeviceInfo, DeviceRegistry, PortDirection, PortInfo, PortWireSummary, ProductPort,
+};
 pub use engine::{
     parse_discovery_targets_from_env, spawn_discovery, spawn_discovery_with_config,
     DiscoveryConfig, JitterCollector, SourceTracker, Staleness, SyncDetector, UniverseMetrics,

@@ -68,7 +68,7 @@ pub async fn run(target: &str) -> Result<()> {
         [0; 4],
         [0; 4],
         0,
-        ArtAddressCommand::AcNone,
+        ArtAddressCommand::AcNone as u8,
     );
     socket.send_to(&pkt, target_addr).await?;
     count += 1;

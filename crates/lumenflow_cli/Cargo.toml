@@ -21,3 +21,4 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 nix = { workspace = true }
+serde_yaml = "0.9"

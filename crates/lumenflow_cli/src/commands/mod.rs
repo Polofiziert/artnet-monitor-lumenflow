@@ -6,4 +6,5 @@ pub mod resolve;
 pub mod send;
 pub mod send_all_packets;
 pub mod virtual_console;
+pub mod virtual_network_config;
 pub mod virtual_node;

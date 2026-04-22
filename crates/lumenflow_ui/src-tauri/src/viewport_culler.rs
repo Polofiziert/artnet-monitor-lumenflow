@@ -6,12 +6,13 @@ use std::time::{Duration, Instant};
 
 use dashmap::DashSet;
 use lumenflow_core::artnet::{
-    build_art_address, build_art_data_request, build_art_ip_prog, build_our_poll_reply,
-    ArtAddressCommand, ArtNetParser, IpProgConfig, ART_ADDRESS_NO_CHANGE, ART_NET_PORT,
+    build_art_address, build_art_address_command_only, build_art_data_request, build_art_ip_prog,
+    build_our_poll_reply, ArtAddressCommand, ArtNetParser, IpProgConfig, ART_ADDRESS_NO_CHANGE,
+    ART_NET_PORT,
 };
 use lumenflow_core::buffer::UniverseStore;
 use lumenflow_core::build_art_poll;
-use lumenflow_core::device::{ArtNetProduct, DeviceInfo, DeviceRegistry};
+use lumenflow_core::device::{ArtNetProduct, DeviceInfo, DeviceRegistry, PortWireSummary};
 use lumenflow_core::engine::{
     DiagBuffer, DiagPriority, DiscoveryConfig, JitterCollector, Staleness, SyncDetector,
 };
@@ -131,6 +132,18 @@ pub struct ProductPortDto {
     pub output_universe: u16,
     pub input_universe: Option<u16>,
     pub label: String,
+    /// `PortTypes[slot]` from ArtPollReply.
+    pub port_type: u8,
+    /// `GoodOutput[slot]`.
+    pub good_output: u8,
+    /// `GoodInput[slot]`.
+    pub good_input: u8,
+    /// `GoodOutputB[slot]`.
+    pub good_output_b: u8,
+    /// `Status2` from the bind page that owns this port.
+    pub status2: u8,
+    /// Decoded node-reported semantics for UI/CLI (see `ProductPort::wire_summary`).
+    pub wire: PortWireSummary,
 }
 
 /// One physical Art-Net node, merged from all BindIndex replies for the same bind IP + MAC.
@@ -147,6 +160,8 @@ pub struct ArtNetProductDto {
     pub oem_code: u16,
     pub firmware_version: u16,
     pub node_report: String,
+    /// ArtPollReply `Style` (Table 4). `0x00` = StNode (typical DMX node).
+    pub style: u8,
     pub status1: u8,
     pub status2: u8,
     pub ports: Vec<ProductPortDto>,
@@ -284,17 +299,27 @@ fn map_artnet_product_to_dto(p: ArtNetProduct, cutoff: Instant) -> ArtNetProduct
         oem_code: p.oem_code,
         firmware_version: p.firmware_version,
         node_report: p.node_report,
+        style: p.style,
         status1: p.status1,
         status2: p.status2,
         ports: p
             .ports
             .into_iter()
-            .map(|port| ProductPortDto {
-                bind_index: port.bind_index,
-                slot: port.slot,
-                output_universe: port.output_universe,
-                input_universe: port.input_universe,
-                label: port.label,
+            .map(|port| {
+                let wire = port.wire_summary();
+                ProductPortDto {
+                    bind_index: port.bind_index,
+                    slot: port.slot,
+                    output_universe: port.output_universe,
+                    input_universe: port.input_universe,
+                    label: port.label,
+                    port_type: port.port_type,
+                    good_output: port.good_output,
+                    good_input: port.good_input,
+                    good_output_b: port.good_output_b,
+                    status2: port.status2,
+                    wire,
+                }
             })
             .collect(),
         online: p.last_seen >= cutoff,
@@ -389,6 +414,16 @@ pub struct IpProgReplyDto {
     pub dhcp_enabled: bool,
 }
 
+/// Command-only ArtAddress payload (`Command` byte + `BindIndex`), no SwIn/SwOut/name changes.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct PortWireCommandDto {
+    /// One of: `merge_ltp`, `merge_htp`, `direction_tx`, `direction_rx`, `select_artnet`,
+    /// `select_sacn`, `rdm_enable`, `rdm_disable`, `cancel_merge`, `clear_buffer`.
+    pub op: String,
+    pub bind_index: u8,
+    pub slot: u8,
+}
+
 /// Parameters for remotely programming device names via ArtAddress.
 #[derive(serde::Deserialize)]
 pub struct ArtAddressParams {
@@ -408,6 +443,10 @@ pub struct ArtAddressParams {
     pub set_input_universe: Option<PortUniverseUpdate>,
     /// Optional LED/front-panel indicator command.
     pub led_command: Option<LedCommandDto>,
+    /// Optional: PollReply-backed port command (exclusive with name / universe / LED fields).
+    pub port_wire_command: Option<PortWireCommandDto>,
+    /// ArtPollReply `Status2` from the same node (used to gate RDM / Art-Net vs sACN commands).
+    pub device_status2: Option<u8>,
 }
 
 /// Frontend LED intent mapped to ArtAddress command values.
@@ -521,6 +560,67 @@ pub async fn send_ip_prog(
         .map_err(|_| "Listener dropped pending ArtIpProg request".to_string())?
 }
 
+/// Maps UI/CLI `port_wire_command.op` + slot to the ArtAddress `Command` byte (Art-Net 4 table).
+fn port_wire_command_byte(
+    cmd: &PortWireCommandDto,
+    device_status2: Option<u8>,
+) -> Result<u8, String> {
+    const ST2_RDM_ART_ADDR: u8 = 0x80;
+    const ST2_ARTNET_SACN: u8 = 0x10;
+
+    let st = device_status2.unwrap_or(0);
+    match cmd.op.as_str() {
+        "cancel_merge" => Ok(0x01),
+        "merge_ltp" | "merge_htp" | "direction_tx" | "direction_rx" | "select_artnet"
+        | "select_sacn" | "rdm_enable" | "rdm_disable" | "clear_buffer" | "style_delta"
+        | "style_const" => {
+            if cmd.slot > 3 {
+                return Err("port_wire_command.slot must be 0..=3".to_string());
+            }
+            let slot = cmd.slot;
+            match cmd.op.as_str() {
+                "merge_ltp" => Ok(0x10 + slot),
+                "merge_htp" => Ok(0x50 + slot),
+                "direction_tx" => Ok(0x20 + slot),
+                "direction_rx" => Ok(0x30 + slot),
+                "select_artnet" | "select_sacn" => {
+                    if (st & ST2_ARTNET_SACN) == 0 {
+                        return Err(
+                            "Node Status2 bit4 clr: device does not advertise Art-Net/sACN switching via ArtAddress. Next: confirm PollReply Status2 in Devices › Protocol, or use the product web UI if present."
+                                .to_string(),
+                        );
+                    }
+                    if cmd.op == "select_artnet" {
+                        Ok(0x60 + slot)
+                    } else {
+                        Ok(0x70 + slot)
+                    }
+                }
+                "rdm_enable" | "rdm_disable" => {
+                    if (st & ST2_RDM_ART_ADDR) == 0 {
+                        return Err(
+                            "Node Status2 bit7 clr: RDM is not controllable via ArtAddress on this node. Next: confirm PollReply Status2 in Devices › Protocol."
+                                .to_string(),
+                        );
+                    }
+                    if cmd.op == "rdm_enable" {
+                        Ok(0xC0 + slot)
+                    } else {
+                        Ok(0xD0 + slot)
+                    }
+                }
+                "clear_buffer" => Ok(0x90 + slot),
+                "style_delta" => Ok(0xA0 + slot),
+                "style_const" => Ok(0xB0 + slot),
+                _ => Err("internal: port op routing mismatch".to_string()),
+            }
+        }
+        other => Err(format!(
+            "Unknown port_wire_command.op: {other}. Expected merge_ltp|merge_htp|direction_tx|direction_rx|select_artnet|select_sacn|rdm_enable|rdm_disable|cancel_merge|clear_buffer|style_delta|style_const."
+        )),
+    }
+}
+
 fn sanitize_artnet_text(value: Option<&str>, max: usize) -> Option<String> {
     value
         .map(str::trim)
@@ -555,9 +655,6 @@ pub async fn send_art_address(
     _network_state: State<'_, NetworkState>,
     app_state: State<'_, AppState>,
 ) -> Result<(), String> {
-    if params.bind_index == 0 {
-        return Err("Invalid bind_index: expected 1..=255".to_string());
-    }
     let target_ip: std::net::Ipv4Addr = params
         .target_ip
         .parse()
@@ -570,60 +667,129 @@ pub async fn send_art_address(
         SocketAddr::from((target_ip, ART_NET_PORT))
     };
 
-    let short_name = sanitize_artnet_text(params.port_name.as_deref(), 17).unwrap_or_default();
-    let long_name = sanitize_artnet_text(params.long_name.as_deref(), 63).unwrap_or_default();
-    let led_command = match params.led_command {
-        Some(LedCommandDto::Identify) => ArtAddressCommand::AcLedLocate,
-        Some(LedCommandDto::Mute) => ArtAddressCommand::AcLedMute,
-        Some(LedCommandDto::Normal) => ArtAddressCommand::AcLedNormal,
-        None => ArtAddressCommand::AcNone,
+    let packet: [u8; 107] = if let Some(ref cmd) = params.port_wire_command {
+        if params.port_name.is_some()
+            || params.long_name.is_some()
+            || params.set_output_universe.is_some()
+            || params.set_input_universe.is_some()
+            || params.led_command.is_some()
+        {
+            return Err(
+                "port_wire_command cannot be combined with port_name, long_name, universe updates, or led_command."
+                    .to_string(),
+            );
+        }
+        if cmd.bind_index == 0 {
+            return Err("Invalid bind_index in port_wire_command: expected 1..=255".to_string());
+        }
+        if params.bind_index != cmd.bind_index {
+            return Err(format!(
+                "bind_index mismatch: params.bind_index={} but port_wire_command.bind_index={}",
+                params.bind_index, cmd.bind_index
+            ));
+        }
+        let b = port_wire_command_byte(cmd, params.device_status2)?;
+        build_art_address_command_only(cmd.bind_index, b)
+    } else {
+        if params.bind_index == 0 {
+            return Err("Invalid bind_index: expected 1..=255".to_string());
+        }
+
+        let short_name = sanitize_artnet_text(params.port_name.as_deref(), 17).unwrap_or_default();
+        let long_name = sanitize_artnet_text(params.long_name.as_deref(), 63).unwrap_or_default();
+        let led_command = match params.led_command {
+            Some(LedCommandDto::Identify) => ArtAddressCommand::AcLedLocate as u8,
+            Some(LedCommandDto::Mute) => ArtAddressCommand::AcLedMute as u8,
+            Some(LedCommandDto::Normal) => ArtAddressCommand::AcLedNormal as u8,
+            None => ArtAddressCommand::AcNone as u8,
+        };
+
+        let mut sw_in = [ART_ADDRESS_NO_CHANGE; 4];
+        let mut sw_out = [ART_ADDRESS_NO_CHANGE; 4];
+
+        // PollReply Status2 bit3 — node supports 15-bit port-address (Art-Net 3/4).
+        const ST2_15BIT_PORT_ADDR: u8 = 0x08;
+        let supports_15bit = params
+            .device_status2
+            .map(|s| (s & ST2_15BIT_PORT_ADDR) != 0)
+            .unwrap_or(false);
+
+        if supports_15bit {
+            if let (Some(ref o), Some(ref i)) =
+                (&params.set_output_universe, &params.set_input_universe)
+            {
+                if (o.universe >> 4) != (i.universe >> 4) {
+                    return Err(
+                        "ArtAddress carries one Net/Sub prefix per packet; combined output and input universe updates must share the same Net/Sub (bits 15..4)."
+                            .to_string(),
+                    );
+                }
+            }
+        }
+
+        // NetSwitch/SubSwitch: when 15-bit capable, program bits 14..4 from the universe being set
+        // (see Art-Net 4 ArtAddress: bit7 high on NetSwitch/SubSwitch to apply). Otherwise leave
+        // no-change so only SwIn/SwOut nibbles are programmed (8-bit / nibble-only path).
+        let (net_switch_byte, sub_switch_byte) = if supports_15bit {
+            let u = params
+                .set_output_universe
+                .as_ref()
+                .map(|u| u.universe)
+                .or_else(|| params.set_input_universe.as_ref().map(|u| u.universe));
+            if let Some(uv) = u {
+                (
+                    0x80u8 | ((uv >> 8) & 0x7f) as u8,
+                    0x80u8 | ((uv >> 4) & 0x0f) as u8,
+                )
+            } else {
+                (ART_ADDRESS_NO_CHANGE, ART_ADDRESS_NO_CHANGE)
+            }
+        } else {
+            (ART_ADDRESS_NO_CHANGE, ART_ADDRESS_NO_CHANGE)
+        };
+
+        if let Some(ref up) = params.set_output_universe {
+            if up.slot >= 4 {
+                return Err("Invalid output slot: expected 0..=3".to_string());
+            }
+            if up.universe > 0x7fff {
+                return Err("Invalid output universe: expected 0..=32767".to_string());
+            }
+            let uni_nibble = (up.universe & 0x0f) as u8;
+            // Spec: SwOut is ignored unless bit7 is high.
+            sw_out[up.slot as usize] = 0x80 | uni_nibble;
+        }
+        if let Some(ref up) = params.set_input_universe {
+            if up.slot >= 4 {
+                return Err("Invalid input slot: expected 0..=3".to_string());
+            }
+            if up.universe > 0x7fff {
+                return Err("Invalid input universe: expected 0..=32767".to_string());
+            }
+            let uni_nibble = (up.universe & 0x0f) as u8;
+            sw_in[up.slot as usize] = 0x80 | uni_nibble;
+        }
+
+        if short_name.is_empty()
+            && long_name.is_empty()
+            && params.set_output_universe.is_none()
+            && params.set_input_universe.is_none()
+            && params.led_command.is_none()
+        {
+            return Err("No ArtAddress update requested".to_string());
+        }
+
+        build_art_address(
+            net_switch_byte,
+            params.bind_index,
+            &short_name,
+            &long_name,
+            sw_in,
+            sw_out,
+            sub_switch_byte,
+            led_command,
+        )
     };
-
-    let mut sw_in = [ART_ADDRESS_NO_CHANGE; 4];
-    let mut sw_out = [ART_ADDRESS_NO_CHANGE; 4];
-
-    if let Some(ref up) = params.set_output_universe {
-        if up.slot >= 4 {
-            return Err("Invalid output slot: expected 0..=3".to_string());
-        }
-        if up.universe > 0x7fff {
-            return Err("Invalid output universe: expected 0..=32767".to_string());
-        }
-        let uni_nibble = (up.universe & 0x0f) as u8;
-        // Spec: SwOut is ignored unless bit7 is high. We set bit7 and program only the nibble.
-        // NetSwitch/SubSwitch remain no-change (bit7 low) to avoid touching global Net/SubNet.
-        sw_out[up.slot as usize] = 0x80 | uni_nibble;
-    }
-    if let Some(ref up) = params.set_input_universe {
-        if up.slot >= 4 {
-            return Err("Invalid input slot: expected 0..=3".to_string());
-        }
-        if up.universe > 0x7fff {
-            return Err("Invalid input universe: expected 0..=32767".to_string());
-        }
-        let uni_nibble = (up.universe & 0x0f) as u8;
-        sw_in[up.slot as usize] = 0x80 | uni_nibble;
-    }
-
-    if short_name.is_empty()
-        && long_name.is_empty()
-        && params.set_output_universe.is_none()
-        && params.set_input_universe.is_none()
-        && params.led_command.is_none()
-    {
-        return Err("No ArtAddress update requested".to_string());
-    }
-
-    let packet = build_art_address(
-        ART_ADDRESS_NO_CHANGE,
-        params.bind_index,
-        &short_name,
-        &long_name,
-        sw_in,
-        sw_out,
-        ART_ADDRESS_NO_CHANGE,
-        led_command,
-    );
 
     let (tx, rx) = oneshot::channel::<Result<(), String>>();
     let listener_tx = app_state
@@ -1512,6 +1678,48 @@ mod tests {
     }
 
     #[test]
+    fn port_wire_command_merge_ltp_uses_spec_port_offsets() {
+        let cmd = PortWireCommandDto {
+            op: "merge_ltp".to_string(),
+            bind_index: 1,
+            slot: 2,
+        };
+        assert_eq!(port_wire_command_byte(&cmd, None).unwrap(), 0x12);
+    }
+
+    #[test]
+    fn art_address_full_15bit_sets_net_sub_and_swout_nibble() {
+        let universe: u16 = 0x1234;
+        let net_switch_byte = 0x80u8 | ((universe >> 8) & 0x7f) as u8;
+        let sub_switch_byte = 0x80u8 | ((universe >> 4) & 0x0f) as u8;
+        let mut sw_out = [ART_ADDRESS_NO_CHANGE; 4];
+        sw_out[0] = 0x80 | (universe & 0x0f) as u8;
+        let pkt = build_art_address(
+            net_switch_byte,
+            1,
+            "",
+            "",
+            [ART_ADDRESS_NO_CHANGE; 4],
+            sw_out,
+            sub_switch_byte,
+            ArtAddressCommand::AcNone as u8,
+        );
+        assert_eq!(pkt[12], 0x92);
+        assert_eq!(pkt[104], 0x83);
+        assert_eq!(pkt[100], 0x84);
+    }
+
+    #[test]
+    fn port_wire_command_style_delta_uses_spec_port_offsets() {
+        let cmd = PortWireCommandDto {
+            op: "style_delta".to_string(),
+            bind_index: 1,
+            slot: 1,
+        };
+        assert_eq!(port_wire_command_byte(&cmd, None).unwrap(), 0xA1);
+    }
+
+    #[test]
     fn maps_artnet_product_to_frontend_dto() {
         let cutoff = Instant::now() - Duration::from_secs(3);
         let p = ArtNetProduct {
@@ -1528,12 +1736,18 @@ mod tests {
             node_report: "OK".to_string(),
             status1: 0b0100_0000,
             status2: 0x20,
+            style: 0,
             ports: vec![ProductPort {
                 bind_index: 1,
                 slot: 0,
                 output_universe: 0x0005,
                 input_universe: None,
                 label: "Port 1".to_string(),
+                port_type: 0x80,
+                good_output: 0x80,
+                good_input: 0,
+                good_output_b: 0,
+                status2: 0x20,
             }],
             last_seen: Instant::now(),
         };
@@ -1547,6 +1761,7 @@ mod tests {
         assert_eq!(dto.primary_bind_index, 1);
         assert_eq!(dto.status1, 0b0100_0000);
         assert_eq!(dto.status2, 0x20);
+        assert_eq!(dto.style, 0);
     }
 
     #[test]
@@ -1567,6 +1782,7 @@ mod tests {
             node_report: "".into(),
             status1: 0,
             status2: 0,
+            style: 0,
             ports: vec![],
             last_seen: Instant::now(),
         };

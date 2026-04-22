@@ -3,6 +3,146 @@ use std::net::{Ipv4Addr, SocketAddr};
 
 use dashmap::DashMap;
 
+/// Splits a 15-bit port-address into Art-Net **Net** (7 bits), **Sub** (4 bits), **Uni** (4 bits).
+#[must_use]
+pub fn split_15bit_port_address(addr: u16) -> (u8, u8, u8) {
+    let net = ((addr >> 8) & 0x7F) as u8;
+    let sub = ((addr >> 4) & 0x0F) as u8;
+    let uni = (addr & 0x0F) as u8;
+    (net, sub, uni)
+}
+
+/// Decoded per-port status from ArtPollReply `PortTypes`, `GoodOutput`, `GoodInput`, `GoodOutputB`, and `Status2`.
+///
+/// All booleans follow **wire semantics** (node-reported); they are not inferred from live DMX traffic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct PortWireSummary {
+    /// `PortTypes` bit 7 — channel can output Art-Net data.
+    pub artnet_output_capable: bool,
+    /// `PortTypes` bit 6 — channel can input Art-Net data.
+    pub artnet_input_capable: bool,
+    /// `PortTypes` bits 5..0 (protocol code, e.g. 0 = DMX512).
+    pub protocol_code: u8,
+    /// `GoodOutput` bit 0 set — output selected to convert **from** sACN (clr = Art-Net).
+    pub output_sacn_selected: bool,
+    /// `GoodInput` bit 0 set — input selected to convert **to** sACN (clr = Art-Net).
+    pub input_sacn_selected: bool,
+    /// `GoodOutput` bit 1 set — merge mode **LTP** (clr = HTP).
+    pub merge_ltp: bool,
+    /// `GoodOutput` bit 3 set — output is merging Art-Net data (two-source merge per spec).
+    pub merge_artnet_active: bool,
+    /// `GoodOutput` bit 7 set — ArtDmx or sACN data is being output as DMX512 on this port.
+    pub output_data_active: bool,
+    /// `GoodOutput` bit 2 set — DMX output short detected.
+    pub output_short_detected: bool,
+    /// `GoodInput` bit 7 set — data received on input.
+    pub input_data_received: bool,
+    /// `GoodInput` bit 2 set — receive errors detected.
+    pub input_receive_errors: bool,
+    /// `GoodOutputB` bit 7 set — **RDM disabled** on this output (clr = RDM enabled).
+    pub rdm_disabled: bool,
+    /// `Status2` bit 7 set — node supports RDM control via ArtAddress.
+    pub node_supports_rdm_art_address: bool,
+    /// `Status2` bit 3 set — node supports 15-bit port-address (Art-Net 3/4).
+    pub node_supports_15bit_address: bool,
+    /// `Status2` bit 4 set — node can switch between Art-Net and sACN (ArtAddress).
+    pub node_can_switch_artnet_sacn: bool,
+    /// For merge glyph (output path): 0 = outlined only, 1 = one stacked square filled, 2 = both filled (two-source merge).
+    pub merge_glyph_output_filled_stack: u8,
+    /// For merge glyph (input path): lone square filled when input data is present.
+    pub merge_glyph_input_lone_filled: bool,
+    /// True when RDM is **enabled** on wire (`GoodOutputB` bit7 clr) and port has output capability.
+    pub rdm_active_on_port: bool,
+}
+
+/// Decodes [`PortWireSummary`] from raw ArtPollReply per-port bytes for `slot` 0..=3.
+#[must_use]
+pub fn decode_port_wire_from_poll(
+    port_type: u8,
+    good_output: u8,
+    good_input: u8,
+    good_output_b: u8,
+    status2: u8,
+) -> PortWireSummary {
+    const PT_OUT: u8 = 0x80;
+    const PT_IN: u8 = 0x40;
+    const PT_PROTO: u8 = 0x3F;
+    const ST2_RDM_ADDR: u8 = 0x80;
+    /// Bit 3 — 15-bit port-address support (see ArtPollReply Status2).
+    const ST2_15BIT_PORT_ADDR: u8 = 0x08;
+    /// Bit 4 — Art-Net vs sACN selection via ArtAddress.
+    const ST2_ARTNET_SACN_SWITCH: u8 = 0x10;
+
+    let artnet_output_capable = (port_type & PT_OUT) != 0;
+    let artnet_input_capable = (port_type & PT_IN) != 0;
+    let protocol_code = port_type & PT_PROTO;
+
+    let output_sacn_selected = (good_output & 0x01) != 0;
+    let merge_ltp = (good_output & 0x02) != 0;
+    let output_short_detected = (good_output & 0x04) != 0;
+    let merge_artnet_active = (good_output & 0x08) != 0;
+    let output_data_active = (good_output & 0x80) != 0;
+
+    let input_sacn_selected = (good_input & 0x01) != 0;
+    let input_receive_errors = (good_input & 0x04) != 0;
+    let input_data_received = (good_input & 0x80) != 0;
+
+    let rdm_disabled = (good_output_b & 0x80) != 0;
+    let node_supports_rdm_art_address = (status2 & ST2_RDM_ADDR) != 0;
+    let node_supports_15bit_address = (status2 & ST2_15BIT_PORT_ADDR) != 0;
+    let node_can_switch_artnet_sacn = (status2 & ST2_ARTNET_SACN_SWITCH) != 0;
+
+    let rdm_active_on_port = artnet_output_capable && !rdm_disabled;
+
+    let merge_glyph_output_filled_stack = if merge_artnet_active {
+        2
+    } else if output_data_active && artnet_output_capable {
+        1
+    } else {
+        0
+    };
+
+    // Input-only ports: lone square filled when data received (merge glyph input variant).
+    let merge_glyph_input_lone_filled =
+        artnet_input_capable && !artnet_output_capable && input_data_received;
+
+    PortWireSummary {
+        artnet_output_capable,
+        artnet_input_capable,
+        protocol_code,
+        output_sacn_selected,
+        input_sacn_selected,
+        merge_ltp,
+        merge_artnet_active,
+        output_data_active,
+        output_short_detected,
+        input_data_received,
+        input_receive_errors,
+        rdm_disabled,
+        node_supports_rdm_art_address,
+        node_supports_15bit_address,
+        node_can_switch_artnet_sacn,
+        merge_glyph_output_filled_stack,
+        merge_glyph_input_lone_filled,
+        rdm_active_on_port,
+    }
+}
+
+/// Human label for ArtPollReply `PortTypes` bits 5..0 (protocol code table, Art-Net 4).
+#[must_use]
+pub fn port_protocol_name(protocol_code: u8) -> &'static str {
+    match protocol_code & 0x3f {
+        0 => "DMX512",
+        1 => "MIDI",
+        2 => "Avab",
+        3 => "Colortran CMX",
+        4 => "ADB 62.5",
+        5 => "Art-Net",
+        6 => "DALI",
+        _ => "Other",
+    }
+}
+
 /// One logical DMX port on an Art-Net product (flattened across BindIndex pages).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductPort {
@@ -16,6 +156,30 @@ pub struct ProductPort {
     pub input_universe: Option<u16>,
     /// Display label (typically the bind’s Short Name, plus slot when `num_ports` > 1).
     pub label: String,
+    /// `PortTypes[slot]` from the owning ArtPollReply page.
+    pub port_type: u8,
+    /// `GoodOutput[slot]` from the owning ArtPollReply page.
+    pub good_output: u8,
+    /// `GoodInput[slot]` from the owning ArtPollReply page.
+    pub good_input: u8,
+    /// `GoodOutputB[slot]` from the owning ArtPollReply page.
+    pub good_output_b: u8,
+    /// `Status2` from the owning bind page (same for all slots on that page).
+    pub status2: u8,
+}
+
+impl ProductPort {
+    /// Node-reported wire summary for UI / CLI.
+    #[must_use]
+    pub fn wire_summary(&self) -> PortWireSummary {
+        decode_port_wire_from_poll(
+            self.port_type,
+            self.good_output,
+            self.good_input,
+            self.good_output_b,
+            self.status2,
+        )
+    }
 }
 
 /// One physical Art-Net product: all BindIndex replies sharing the same bind IP and MAC.
@@ -44,6 +208,8 @@ pub struct ArtNetProduct {
     pub status1: u8,
     /// ArtPollReply Status2 from the primary bind page.
     pub status2: u8,
+    /// ArtPollReply `Style` (Table 4) from the primary bind page (`0x00` = StNode).
+    pub style: u8,
     pub ports: Vec<ProductPort>,
     pub last_seen: std::time::Instant,
 }
@@ -223,6 +389,7 @@ impl DeviceRegistry {
                 let node_report = ref_bind.map(|d| d.node_report.clone()).unwrap_or_default();
                 let status1 = ref_bind.map(|d| d.status1).unwrap_or(0);
                 let status2 = ref_bind.map(|d| d.status2).unwrap_or(0);
+                let style = ref_bind.map(|d| d.style).unwrap_or(0);
 
                 let last_seen = binds
                     .iter()
@@ -244,12 +411,18 @@ impl DeviceRegistry {
                             bind.short_name.clone()
                         };
                         let input = bind.input_port_addresses.get(slot).copied();
+                        let i = slot.min(3);
                         ports.push(ProductPort {
                             bind_index: bind.bind_index,
                             slot: slot as u8,
                             output_universe: bind.port_addresses[slot],
                             input_universe: input,
                             label,
+                            port_type: bind.port_types[i],
+                            good_output: bind.good_output[i],
+                            good_input: bind.good_input[i],
+                            good_output_b: bind.good_output_b[i],
+                            status2: bind.status2,
                         });
                     }
                 }
@@ -268,6 +441,7 @@ impl DeviceRegistry {
                     node_report,
                     status1,
                     status2,
+                    style,
                     ports,
                     last_seen,
                 }
@@ -551,5 +725,82 @@ mod tests {
         let products = registry.aggregate_products();
         assert_eq!(products.len(), 1);
         assert_eq!(products[0].bind_ip, Ipv4Addr::from([10, 0, 0, 1]));
+    }
+
+    #[test]
+    fn test_aggregate_products_carries_poll_wire_bytes_per_slot() {
+        let registry = DeviceRegistry::new();
+        let mut d = sample_device([10, 0, 0, 1], 1);
+        d.port_types = [0x80, 0xc0, 0, 0];
+        d.good_output = [0x88, 0x8a, 0, 0];
+        d.good_input = [0x80, 0x04, 0, 0];
+        d.good_output_b = [0x00, 0x80, 0, 0];
+        d.status2 = 0x80 | 0x10;
+        let expect_st2 = d.status2;
+        d.num_ports = 2;
+        d.port_addresses = vec![0x0100, 0x0101];
+        registry.upsert(d);
+
+        let p = &registry.aggregate_products()[0];
+        assert_eq!(p.ports.len(), 2);
+        assert_eq!(p.ports[0].port_type, 0x80);
+        assert_eq!(p.ports[0].good_output, 0x88);
+        assert_eq!(p.ports[1].port_type, 0xc0);
+        assert_eq!(p.ports[1].good_output_b, 0x80);
+        assert_eq!(p.ports[0].status2, expect_st2);
+    }
+
+    #[test]
+    fn test_split_15bit_port_address() {
+        assert_eq!(split_15bit_port_address(0x0000), (0, 0, 0));
+        assert_eq!(split_15bit_port_address(0x0010), (0, 1, 0));
+        assert_eq!(split_15bit_port_address(0x7fff), (0x7F, 0x0F, 0x0F));
+    }
+
+    #[test]
+    fn test_decode_port_wire_dmx_output_data_no_merge() {
+        let s = decode_port_wire_from_poll(
+            0x80,
+            0x80,
+            0,
+            0,
+            0x80 | 0x08,
+        );
+        assert!(s.artnet_output_capable);
+        assert!(!s.artnet_input_capable);
+        assert_eq!(s.protocol_code, 0);
+        assert!(s.output_data_active);
+        assert!(!s.merge_artnet_active);
+        assert_eq!(s.merge_glyph_output_filled_stack, 1);
+        assert!(!s.merge_glyph_input_lone_filled);
+        assert!(s.rdm_active_on_port);
+        assert!(s.node_supports_15bit_address);
+        assert!(!s.node_can_switch_artnet_sacn);
+    }
+
+    #[test]
+    fn test_decode_port_wire_merge_two_sources_ltp() {
+        let s = decode_port_wire_from_poll(0x80, 0x8a, 0, 0, 0);
+        assert!(s.merge_artnet_active);
+        assert!(s.merge_ltp);
+        assert_eq!(s.merge_glyph_output_filled_stack, 2);
+    }
+
+    #[test]
+    fn test_decode_port_wire_rdm_disabled_and_sacn_out() {
+        let s = decode_port_wire_from_poll(0x80, 0x81, 0, 0x80, 0);
+        assert!(s.output_sacn_selected);
+        assert!(s.rdm_disabled);
+        assert!(!s.rdm_active_on_port);
+    }
+
+    #[test]
+    fn test_decode_port_wire_input_only_glyph() {
+        let s = decode_port_wire_from_poll(0x40, 0, 0x80, 0, 0);
+        assert!(s.artnet_input_capable);
+        assert!(!s.artnet_output_capable);
+        assert!(s.input_data_received);
+        assert!(s.merge_glyph_input_lone_filled);
+        assert_eq!(s.merge_glyph_output_filled_stack, 0);
     }
 }

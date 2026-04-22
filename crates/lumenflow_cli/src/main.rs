@@ -33,6 +33,14 @@ enum Commands {
         /// Discovery timeout in seconds
         #[arg(short, long, default_value_t = 3)]
         timeout: u64,
+
+        /// Print per-bind port rows (PollReply PortTypes / Good* / addresses)
+        #[arg(long)]
+        ports: bool,
+
+        /// Print JSON (device list, or port rows with `--ports`)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Print version, build info, and available network interfaces
@@ -156,7 +164,11 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Listen { universe, json } => commands::listen::run(universe, json).await,
-        Commands::Poll { timeout } => commands::poll::run(timeout).await,
+        Commands::Poll {
+            timeout,
+            ports,
+            json,
+        } => commands::poll::run(timeout, ports, json).await,
         Commands::Info => commands::info::run(),
         Commands::MockNode { target } => commands::mock_node::run(&target).await,
         Commands::Send {

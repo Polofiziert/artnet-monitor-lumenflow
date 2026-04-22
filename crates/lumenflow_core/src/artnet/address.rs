@@ -2,7 +2,7 @@
 
 use zerocopy::{FromBytes, FromZeroes};
 
-use super::{ArtNetPacket, ParseError, ART_NET_HEADER};
+use super::{ArtNetPacket, ParseError, ART_NET_HEADER, ART_ADDRESS_NO_CHANGE};
 
 /// Art-Net `OpAddress` packet (107 bytes on wire).
 #[repr(C, packed)]
@@ -105,7 +105,7 @@ pub fn build_art_address(
     sw_in: [u8; 4],
     sw_out: [u8; 4],
     sub_switch: u8,
-    command: ArtAddressCommand,
+    command: u8,
 ) -> [u8; 107] {
     let mut pkt = [0u8; 107];
 
@@ -127,15 +127,33 @@ pub fn build_art_address(
     pkt[96..100].copy_from_slice(&sw_in);
     pkt[100..104].copy_from_slice(&sw_out);
     pkt[104] = sub_switch;
-    pkt[106] = command as u8;
+    pkt[106] = command;
 
     pkt
+}
+
+/// Builds an ArtAddress packet that only sets the `Command` byte (no name / SwIn / SwOut changes).
+///
+/// Use with `BindIndex` to target the correct port page; port-specific opcodes use `0x10 + slot`,
+/// `0x50 + slot`, etc. (Art-Net 4 table).
+#[must_use]
+pub fn build_art_address_command_only(bind_index: u8, command: u8) -> [u8; 107] {
+    build_art_address(
+        ART_ADDRESS_NO_CHANGE,
+        bind_index,
+        "",
+        "",
+        [ART_ADDRESS_NO_CHANGE; 4],
+        [ART_ADDRESS_NO_CHANGE; 4],
+        ART_ADDRESS_NO_CHANGE,
+        command,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artnet::{ArtNetParser, ART_ADDRESS_NO_CHANGE};
+    use crate::artnet::ArtNetParser;
 
     #[test]
     fn build_art_address_programs_single_swout_nibble_with_bit7() {
@@ -150,7 +168,7 @@ mod tests {
             [ART_ADDRESS_NO_CHANGE; 4],
             sw_out,
             ART_ADDRESS_NO_CHANGE,
-            ArtAddressCommand::AcNone,
+            ArtAddressCommand::AcNone as u8,
         );
 
         // SwOut starts at offset 100 (4 bytes).
@@ -173,7 +191,7 @@ mod tests {
             [0x80 | 1, 0x80 | 2, 0x7F, 0x7F],
             [0x80 | 5, 0x80 | 6, 0x7F, 0x7F],
             0x80 | 0x02,
-            ArtAddressCommand::AcCancelMerge,
+            ArtAddressCommand::AcCancelMerge as u8,
         );
 
         match ArtNetParser::parse(&pkt) {
@@ -202,7 +220,7 @@ mod tests {
             [0x7F; 4],
             [0x7F; 4],
             ART_ADDRESS_NO_CHANGE,
-            ArtAddressCommand::AcNone,
+            ArtAddressCommand::AcNone as u8,
         );
 
         match ArtNetParser::parse(&pkt) {
@@ -229,7 +247,7 @@ mod tests {
             [0; 4],
             [0; 4],
             0,
-            ArtAddressCommand::AcNone,
+            ArtAddressCommand::AcNone as u8,
         );
 
         match ArtNetParser::parse(&pkt) {
@@ -251,7 +269,7 @@ mod tests {
             [1, 2, 3, 4],
             [5, 6, 7, 8],
             0x0A,
-            ArtAddressCommand::AcLedLocate,
+            ArtAddressCommand::AcLedLocate as u8,
         );
 
         assert_eq!(&pkt[0..8], b"Art-Net\0");
@@ -269,6 +287,13 @@ mod tests {
         assert_eq!(pkt[104], 0x0A);
         assert_eq!(pkt[105], 0x00);
         assert_eq!(pkt[106], ArtAddressCommand::AcLedLocate as u8);
+    }
+
+    #[test]
+    fn build_art_address_command_only_sets_bind_and_command_byte() {
+        let pkt = build_art_address_command_only(2, 0x11);
+        assert_eq!(pkt[13], 2);
+        assert_eq!(pkt[106], 0x11);
     }
 
     #[test]

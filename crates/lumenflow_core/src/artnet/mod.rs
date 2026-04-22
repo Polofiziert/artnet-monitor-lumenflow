@@ -15,7 +15,9 @@ pub mod timecode;
 pub mod tod;
 pub mod trigger;
 
-pub use self::address::{build_art_address, ArtAddressCommand, ArtAddressPacket};
+pub use self::address::{
+    build_art_address, build_art_address_command_only, ArtAddressCommand, ArtAddressPacket,
+};
 pub use self::command::{build_art_command, ArtCommandHeader, ART_COMMAND_DATA_MAX};
 pub use self::data_request::{
     build_art_data_request, ArtDataReplyHeader, ArtDataRequestPacket, DR_POLL, DR_URL_PERS_GDTF,
